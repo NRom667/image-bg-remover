@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap
+from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -32,6 +32,23 @@ from image_bg_remover.inference import InferenceResult, SamInferenceEngine
 from image_bg_remover.masking import apply_mask_to_image
 from image_bg_remover.state import AppState, ImageViewportMapping
 from image_bg_remover.ui.image_preview import ImagePreviewWidget
+from image_bg_remover.ui.theme import (
+    COLOR_ACCENT_SOFT,
+    COLOR_BG_CARD,
+    COLOR_BG_DISABLED,
+    COLOR_BORDER_DEFAULT,
+    COLOR_BORDER_DISABLED,
+    COLOR_CHECKER_DARK,
+    COLOR_CHECKER_LIGHT,
+    COLOR_TEXT_DISABLED,
+    COLOR_TEXT_MUTED,
+    COLOR_TEXT_PRIMARY,
+    COLOR_TEXT_SECONDARY,
+    SIDEBAR_WIDTH,
+    main_window_stylesheet,
+    message_box_stylesheet,
+    qcolor,
+)
 
 
 class ResultPreviewPanel(QFrame):
@@ -53,15 +70,15 @@ class ResultPreviewPanel(QFrame):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
             rect = self.rect().adjusted(1, 1, -1, -1)
-            painter.fillRect(rect, QColor("#fffdf8"))
-            painter.setPen(QColor("#d9cdbb"))
+            painter.fillRect(rect, qcolor(COLOR_BG_CARD))
+            painter.setPen(qcolor(COLOR_BORDER_DEFAULT))
             painter.drawRoundedRect(rect, 18, 18)
 
             body_rect = QRectF(rect.adjusted(18, 18, -18, -18))
             self._draw_checker_background(painter, body_rect)
 
             if self._pixmap is None:
-                painter.setPen(QColor("#7b8794"))
+                painter.setPen(qcolor(COLOR_TEXT_MUTED))
                 placeholder_font = QFont(self.font())
                 placeholder_font.setPointSize(16)
                 painter.setFont(placeholder_font)
@@ -81,8 +98,8 @@ class ResultPreviewPanel(QFrame):
 
     def _draw_checker_background(self, painter: QPainter, rect: QRectF) -> None:
         tile = 14
-        light = QColor("#fbf7ef")
-        dark = QColor("#ede3d2")
+        light = qcolor(COLOR_CHECKER_LIGHT)
+        dark = qcolor(COLOR_CHECKER_DARK)
         y = rect.top()
         row = 0
         while y < rect.bottom():
@@ -103,7 +120,7 @@ class ModelComboBox(QComboBox):
         painter = QPainter(self)
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            arrow_color = QColor("#7c5e3c") if self.isEnabled() else QColor("#9aa5b1")
+            arrow_color = qcolor(COLOR_TEXT_SECONDARY) if self.isEnabled() else qcolor(COLOR_TEXT_DISABLED)
             painter.setPen(QPen(arrow_color, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
 
             center_x = self.width() - 20
@@ -128,14 +145,14 @@ class ModelComboItemDelegate(QStyledItemDelegate):
 
         is_enabled = bool(index.flags() & Qt.ItemFlag.ItemIsEnabled)
         is_selected = bool(item_option.state & QStyle.StateFlag.State_Selected) and is_enabled
-        background_color = QColor("#f7efe1") if is_selected else QColor("#fffdf8")
+        background_color = qcolor(COLOR_ACCENT_SOFT) if is_selected else qcolor(COLOR_BG_CARD)
         if not is_enabled:
-            background_color = QColor("#f4efe6")
-        border_color = QColor("#eadfce") if is_selected else QColor("#fffdf8")
+            background_color = qcolor(COLOR_BG_DISABLED)
+        border_color = qcolor(COLOR_BORDER_DEFAULT) if is_selected else qcolor(COLOR_BG_CARD)
         if not is_enabled:
-            border_color = QColor("#e0d7ca")
-        name_color = QColor("#102a43") if is_enabled else QColor("#9aa5b1")
-        description_color = QColor("#486581") if is_enabled else QColor("#b0b8c1")
+            border_color = qcolor(COLOR_BORDER_DISABLED)
+        name_color = qcolor(COLOR_TEXT_PRIMARY) if is_enabled else qcolor(COLOR_TEXT_DISABLED)
+        description_color = qcolor(COLOR_TEXT_SECONDARY) if is_enabled else qcolor(COLOR_TEXT_DISABLED)
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -348,7 +365,7 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self) -> QWidget:
         sidebar = QFrame(self)
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(320)
+        sidebar.setFixedWidth(SIDEBAR_WIDTH)
         sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
 
         layout = QVBoxLayout(sidebar)
@@ -369,6 +386,7 @@ class MainWindow(QMainWindow):
         instruction.setWordWrap(True)
 
         self.reset_button = QPushButton("リセット", sidebar)
+        self.reset_button.setObjectName("tertiaryButton")
         self.reset_button.clicked.connect(self._handle_reset)
 
         action_group = QGroupBox("Actions", sidebar)
@@ -376,6 +394,7 @@ class MainWindow(QMainWindow):
         action_layout.setSpacing(10)
 
         self.create_mask_button = QPushButton("マスク作成", action_group)
+        self.create_mask_button.setObjectName("primaryButton")
         self.create_mask_button.clicked.connect(self._handle_create_mask)
         self.remove_background_button = QPushButton("背景を削除", action_group)
         self.remove_background_button.clicked.connect(self._handle_remove_background)
@@ -689,110 +708,10 @@ class MainWindow(QMainWindow):
             self.result_info_label.setText("背景削除結果は未生成です")
 
     def _apply_styles(self) -> None:
-        self.setStyleSheet(
-            """
-            QMainWindow {
-                background: #f1ece2;
-            }
-            QScrollArea#windowScrollArea {
-                border: none;
-                background: #f1ece2;
-            }
-            QWidget#scrollContent {
-                background: #f1ece2;
-            }
-            QFrame#sidebar {
-                background: #fffaf1;
-                border: 1px solid #e5dccd;
-                border-radius: 20px;
-            }
-            QLabel {
-                color: #334e68;
-                font-size: 14px;
-            }
-            QLabel#sidebarTitle {
-                color: #102a43;
-                font-size: 24px;
-                font-weight: 700;
-            }
-            QLabel#instructionLabel, QLabel#metaLabel {
-                color: #486581;
-                background: #f7f1e6;
-                border: 1px solid #eadfce;
-                border-radius: 14px;
-                padding: 12px;
-            }
-            QGroupBox {
-                color: #243b53;
-                font-size: 13px;
-                font-weight: 600;
-                border: 1px solid #e6dccb;
-                border-radius: 16px;
-                margin-top: 10px;
-                padding: 16px 12px 12px 12px;
-                background: #fffdf9;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 4px;
-            }
-            QPushButton, QComboBox {
-                min-height: 42px;
-                border-radius: 12px;
-                border: 2px solid #d9cdbb;
-                padding: 8px 12px;
-                background: #fffdf8;
-                color: #102a43;
-                font-size: 16px;
-            }
-            QPushButton {
-                letter-spacing: 0.02em;
-                font-weight: 500;
-            }
-            QComboBox {
-                padding-right: 36px;
-            }
-            QComboBox QAbstractItemView {
-                background: #fffdf8;
-                color: #102a43;
-                border: 1px solid #d9cdbb;
-                border-radius: 12px;
-                padding: 6px;
-                selection-background-color: #f7efe1;
-                selection-color: #102a43;
-                outline: 0;
-            }
-            QPushButton:hover, QComboBox:hover {
-                border: 1px solid #bfa98a;
-                background: #fff6e8;
-            }
-            QPushButton:disabled, QComboBox:disabled {
-                color: #9aa5b1;
-                background: #f4efe6;
-                border: 1px solid #e0d7ca;
-            }
-            QComboBox::drop-down {
-                width: 28px;
-                border: none;
-            }
-            QScrollBar:vertical {
-                background: #efe7d9;
-                width: 14px;
-                margin: 8px 4px 8px 0;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:vertical {
-                background: #c9b59b;
-                min-height: 32px;
-                border-radius: 7px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QStatusBar {
-                background: #fffaf1;
-                color: #486581;
-            }
-            """
-        )
+        self.setStyleSheet(main_window_stylesheet())
+
+
+
+
+
+

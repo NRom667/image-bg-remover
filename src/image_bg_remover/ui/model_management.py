@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
 from PySide6.QtWidgets import (
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from image_bg_remover.config import ModelDefinition
 from image_bg_remover.model_download import DownloadProgress, download_model_files
+from image_bg_remover.ui.theme import dialog_stylesheet, message_box_stylesheet
 
 
 class ModelDownloadWorker(QObject):
@@ -112,31 +113,7 @@ class ModelManagementDialog(QDialog):
         message_box.setWindowTitle(title)
         message_box.setText(text)
         message_box.setStandardButtons(QMessageBox.StandardButton.Ok)
-        message_box.setStyleSheet(
-            """
-            QMessageBox {
-                background: #f8f3ea;
-            }
-            QMessageBox QLabel {
-                color: #102a43;
-                font-size: 14px;
-            }
-            QMessageBox QPushButton {
-                min-width: 88px;
-                min-height: 38px;
-                border-radius: 12px;
-                border: 1px solid #d9cdbb;
-                padding: 8px 16px;
-                background: #fffdf8;
-                color: #102a43;
-                font-size: 14px;
-            }
-            QMessageBox QPushButton:hover {
-                border: 1px solid #bfa98a;
-                background: #fff6e8;
-            }
-            """
-        )
+        message_box.setStyleSheet(message_box_stylesheet())
         message_box.exec()
 
     def closeEvent(self, event) -> None:  # noqa: N802
@@ -266,49 +243,7 @@ class ModelManagementDialog(QDialog):
         return f"{value:.1f} {units[unit_index]}"
 
     def _apply_styles(self) -> None:
-        self.setStyleSheet(
-            """
-            QDialog {
-                background: #f8f3ea;
-            }
-            QFrame {
-                background: #fffdf9;
-                border: 1px solid #e6dccb;
-                border-radius: 16px;
-            }
-            QLabel {
-                color: #334e68;
-                font-size: 13px;
-            }
-            QPushButton {
-                min-height: 40px;
-                border-radius: 12px;
-                border: 1px solid #d9cdbb;
-                padding: 8px 12px;
-                background: #fffdf8;
-                color: #102a43;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                border: 1px solid #bfa98a;
-                background: #fff6e8;
-            }
-            QPushButton:disabled {
-                color: #9aa5b1;
-                background: #f4efe6;
-                border: 1px solid #e0d7ca;
-            }
-            QProgressBar {
-                min-height: 24px;
-                border: 1px solid #d9cdbb;
-                border-radius: 10px;
-                background: #fffdf8;
-                text-align: center;
-                color: #243b53;
-            }
-            QProgressBar::chunk {
-                border-radius: 9px;
-                background: #c17c3c;
-            }
-            """
-        )
+        self.setStyleSheet(dialog_stylesheet())
+
+
+

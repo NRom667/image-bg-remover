@@ -1,10 +1,21 @@
 ﻿from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtGui import QFont, QImage, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from image_bg_remover.state import ImageViewportMapping, PromptPoint
+from image_bg_remover.ui.theme import (
+    COLOR_BG_CARD,
+    COLOR_BORDER_DEFAULT,
+    COLOR_CHECKER_DARK,
+    COLOR_CHECKER_LIGHT,
+    COLOR_POINT_BACKGROUND,
+    COLOR_POINT_FOREGROUND,
+    COLOR_POINT_GLYPH,
+    COLOR_TEXT_MUTED,
+    qcolor,
+)
 
 
 class ImagePreviewWidget(QWidget):
@@ -69,15 +80,15 @@ class ImagePreviewWidget(QWidget):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
             rect = self.rect().adjusted(1, 1, -1, -1)
-            painter.fillRect(rect, QColor("#fffdf8"))
-            painter.setPen(QColor("#d9cdbb"))
+            painter.fillRect(rect, qcolor(COLOR_BG_CARD))
+            painter.setPen(qcolor(COLOR_BORDER_DEFAULT))
             painter.drawRoundedRect(rect, 18, 18)
 
             body_rect = QRectF(rect.adjusted(18, 18, -18, -18))
             self._draw_checker_background(painter, body_rect)
 
             if self._pixmap is None or self._mapping is None:
-                painter.setPen(QColor("#7b8794"))
+                painter.setPen(qcolor(COLOR_TEXT_MUTED))
                 placeholder_font = QFont(self.font())
                 placeholder_font.setPointSize(16)
                 painter.setFont(placeholder_font)
@@ -102,9 +113,9 @@ class ImagePreviewWidget(QWidget):
         if self._mapping is None:
             return
         for point in self._foreground_points:
-            self._draw_point_marker(painter, point, QColor("#d64545"), "+")
+            self._draw_point_marker(painter, point, qcolor(COLOR_POINT_FOREGROUND), "+")
         for point in self._background_points:
-            self._draw_point_marker(painter, point, QColor("#2b6cb0"), "-")
+            self._draw_point_marker(painter, point, qcolor(COLOR_POINT_BACKGROUND), "-")
 
     def _draw_point_marker(self, painter: QPainter, point: PromptPoint, color: QColor, symbol: str) -> None:
         if self._mapping is None:
@@ -116,10 +127,10 @@ class ImagePreviewWidget(QWidget):
 
         painter.save()
         painter.setBrush(color)
-        painter.setPen(QPen(QColor("#ffffff"), 1.5))
+        painter.setPen(QPen(qcolor(COLOR_POINT_GLYPH), 1.5))
         painter.drawEllipse(center, marker_radius, marker_radius)
 
-        glyph_pen = QPen(QColor("#ffffff"), 2.2)
+        glyph_pen = QPen(qcolor(COLOR_POINT_GLYPH), 2.2)
         glyph_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(glyph_pen)
         painter.drawLine(
@@ -172,8 +183,8 @@ class ImagePreviewWidget(QWidget):
 
     def _draw_checker_background(self, painter: QPainter, rect: QRectF) -> None:
         tile = 18
-        light = QColor("#fbf7ef")
-        dark = QColor("#f0e7d8")
+        light = qcolor(COLOR_CHECKER_LIGHT)
+        dark = qcolor(COLOR_CHECKER_DARK)
         y = rect.top()
         row = 0
         while y < rect.bottom():
@@ -186,3 +197,5 @@ class ImagePreviewWidget(QWidget):
                 col += 1
             y += tile
             row += 1
+
+
