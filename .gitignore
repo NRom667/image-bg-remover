@@ -1,0 +1,7 @@
+﻿plan.md
+spec.md
+UIイメージ.png
+models/
+__pycache__/
+*.pyc
+.venv/

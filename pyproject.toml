@@ -1,0 +1,22 @@
+﻿[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "image-bg-remover"
+version = "0.1.0"
+description = "Windows desktop app for background removal with SAM2.1."
+readme = "spec.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PySide6>=6.7,<7",
+]
+
+[project.scripts]
+image-bg-remover = "image_bg_remover.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
