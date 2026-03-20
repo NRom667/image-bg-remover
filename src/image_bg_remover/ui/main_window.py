@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QThread, Qt, Signal, Slot
@@ -139,7 +140,7 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
-        self.statusBar().showMessage("Phase 7 background removal ready")
+        self.statusBar().showMessage("Phase 8 save ready")
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self.inference_thread.quit()
@@ -403,9 +404,40 @@ class MainWindow(QMainWindow):
     def _handle_save_result(self) -> None:
         if self.inference_running:
             return
-        if not self.state.background_removed:
+        if self.state.background_removed_image is None:
             return
-        self.statusBar().showMessage("保存処理はフェーズ8で実装します")
+
+        default_path = self._build_default_save_path()
+        selected_file, _ = QFileDialog.getSaveFileName(
+            self,
+            "結果を保存",
+            str(default_path),
+            "PNG Image (*.png)",
+        )
+        if not selected_file:
+            return
+
+        save_path = Path(selected_file)
+        if save_path.suffix.lower() != ".png":
+            save_path = save_path.with_suffix(".png")
+
+        success = self.state.background_removed_image.save(str(save_path), "PNG")
+        if not success:
+            QMessageBox.critical(self, "保存失敗", "透過PNGの保存に失敗しました。")
+            self.statusBar().showMessage("保存に失敗しました")
+            return
+
+        self.statusBar().showMessage(f"結果を保存しました: {save_path.name}")
+
+    def _build_default_save_path(self) -> Path:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if self.state.image_path is not None:
+            base_dir = self.state.image_path.parent
+            base_name = self.state.image_path.stem
+        else:
+            base_dir = Path.home()
+            base_name = "result"
+        return base_dir / f"{base_name}_{timestamp}.png"
 
     def _handle_manage_models(self) -> None:
         if self.inference_running:
