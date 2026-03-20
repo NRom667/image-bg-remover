@@ -121,16 +121,21 @@ class ModelComboItemDelegate(QStyledItemDelegate):
         self.initStyleOption(item_option, index)
 
         full_label = item_option.text
-        if "\u3000" in full_label:
-            model_name, description = full_label.split("\u3000", 1)
+        if "　" in full_label:
+            model_name, description = full_label.split("　", 1)
         else:
             model_name, description = full_label, ""
 
-        is_selected = bool(item_option.state & QStyle.StateFlag.State_Selected)
+        is_enabled = bool(index.flags() & Qt.ItemFlag.ItemIsEnabled)
+        is_selected = bool(item_option.state & QStyle.StateFlag.State_Selected) and is_enabled
         background_color = QColor("#f7efe1") if is_selected else QColor("#fffdf8")
+        if not is_enabled:
+            background_color = QColor("#f4efe6")
         border_color = QColor("#eadfce") if is_selected else QColor("#fffdf8")
-        name_color = QColor("#102a43")
-        description_color = QColor("#486581")
+        if not is_enabled:
+            border_color = QColor("#e0d7ca")
+        name_color = QColor("#102a43") if is_enabled else QColor("#9aa5b1")
+        description_color = QColor("#486581") if is_enabled else QColor("#b0b8c1")
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -735,7 +740,7 @@ class MainWindow(QMainWindow):
             QPushButton, QComboBox {
                 min-height: 42px;
                 border-radius: 12px;
-                border: 1px solid #d9cdbb;
+                border: 2px solid #d9cdbb;
                 padding: 8px 12px;
                 background: #fffdf8;
                 color: #102a43;
