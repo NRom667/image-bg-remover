@@ -20,22 +20,21 @@ from image_bg_remover.model_download import DownloadProgress, download_model_fil
 
 class ModelDownloadWorker(QObject):
     progress = Signal(object)
-    finished = Signal()
+    finished = Signal(str)
     failed = Signal(str)
 
-    def __init__(self, models: list[ModelDefinition]) -> None:
+    def __init__(self, model: ModelDefinition) -> None:
         super().__init__()
-        self._models = list(models)
+        self._model = model
 
     @Slot()
     def run(self) -> None:
         try:
-            for model in self._models:
-                download_model_files(model, self.progress.emit)
+            download_model_files(self._model, self.progress.emit)
         except Exception as exc:
             self.failed.emit(str(exc))
             return
-        self.finished.emit()
+        self.finished.emit(self._model.key)
 
 
 class ModelManagementDialog(QDialog):
@@ -44,10 +43,11 @@ class ModelManagementDialog(QDialog):
         self._models = models
         self._download_thread: QThread | None = None
         self._download_worker: ModelDownloadWorker | None = None
-        self._row_widgets: dict[str, tuple[QLabel, QLabel]] = {}
+        self._active_model_key: str | None = None
+        self._row_widgets: dict[str, tuple[QPushButton, QLabel, QLabel]] = {}
 
         self.setWindowTitle("Model Management")
-        self.resize(560, 360)
+        self.resize(720, 360)
         self.setModal(True)
 
         layout = QVBoxLayout(self)
@@ -55,7 +55,7 @@ class ModelManagementDialog(QDialog):
         layout.setSpacing(14)
 
         description = QLabel(
-            "Check SAM2.1 model files and download any missing checkpoint/config pair.",
+            "Download a checkpoint/config pair for any missing SAM2.1 model.",
             self,
         )
         description.setWordWrap(True)
@@ -65,19 +65,23 @@ class ModelManagementDialog(QDialog):
         grid_layout.setContentsMargins(12, 12, 12, 12)
         grid_layout.setHorizontalSpacing(14)
         grid_layout.setVerticalSpacing(10)
-        grid_layout.addWidget(QLabel("Model", grid_frame), 0, 0)
-        grid_layout.addWidget(QLabel("Status", grid_frame), 0, 1)
-        grid_layout.addWidget(QLabel("Details", grid_frame), 0, 2)
+        grid_layout.addWidget(QLabel("Download", grid_frame), 0, 0)
+        grid_layout.addWidget(QLabel("Model", grid_frame), 0, 1)
+        grid_layout.addWidget(QLabel("Status", grid_frame), 0, 2)
+        grid_layout.addWidget(QLabel("Details", grid_frame), 0, 3)
 
         for row, model in enumerate(self._models, start=1):
+            download_button = QPushButton("Download", grid_frame)
+            download_button.clicked.connect(lambda checked=False, key=model.key: self._start_download_for_model(key))
             name_label = QLabel(model.label, grid_frame)
             status_label = QLabel(grid_frame)
             detail_label = QLabel(grid_frame)
             detail_label.setWordWrap(True)
-            self._row_widgets[model.key] = (status_label, detail_label)
-            grid_layout.addWidget(name_label, row, 0)
-            grid_layout.addWidget(status_label, row, 1)
-            grid_layout.addWidget(detail_label, row, 2)
+            self._row_widgets[model.key] = (download_button, status_label, detail_label)
+            grid_layout.addWidget(download_button, row, 0)
+            grid_layout.addWidget(name_label, row, 1)
+            grid_layout.addWidget(status_label, row, 2)
+            grid_layout.addWidget(detail_label, row, 3)
 
         self.progress_label = QLabel("Idle", self)
         self.progress_bar = QProgressBar(self)
@@ -85,12 +89,9 @@ class ModelManagementDialog(QDialog):
         self.progress_bar.setValue(0)
 
         button_row = QHBoxLayout()
-        self.download_button = QPushButton("Download Missing Models", self)
-        self.download_button.clicked.connect(self._start_download)
+        button_row.addStretch(1)
         self.close_button = QPushButton("Close", self)
         self.close_button.clicked.connect(self.accept)
-        button_row.addWidget(self.download_button)
-        button_row.addStretch(1)
         button_row.addWidget(self.close_button)
 
         layout.addWidget(description)
@@ -109,21 +110,29 @@ class ModelManagementDialog(QDialog):
             return
         super().closeEvent(event)
 
-    def _start_download(self) -> None:
-        missing_models = [model for model in self._models if not model.is_available()]
-        if not missing_models:
-            self.progress_label.setText("All model files are already available.")
-            self.progress_bar.setValue(100)
+    def _start_download_for_model(self, model_key: str) -> None:
+        if self._download_thread is not None and self._download_thread.isRunning():
             return
 
-        self.download_button.setEnabled(False)
-        self.close_button.setEnabled(False)
+        model = next((item for item in self._models if item.key == model_key), None)
+        if model is None:
+            return
+        if model.is_available():
+            self.progress_label.setText(f"{model.label}: already available")
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(100)
+            self._refresh_rows()
+            return
+
+        self._active_model_key = model.key
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_label.setText("Starting download...")
+        self.progress_label.setText(f"{model.label}: starting download...")
+        self.close_button.setEnabled(False)
+        self._refresh_rows()
 
         self._download_thread = QThread(self)
-        self._download_worker = ModelDownloadWorker(missing_models)
+        self._download_worker = ModelDownloadWorker(model)
         self._download_worker.moveToThread(self._download_thread)
         self._download_thread.started.connect(self._download_worker.run)
         self._download_worker.progress.connect(self._handle_progress)
@@ -147,20 +156,22 @@ class ModelManagementDialog(QDialog):
         self.progress_label.setText(f"{progress.model_label}: downloading {progress.file_name} ({size_text})")
         self._refresh_rows(active_file=progress.file_name)
 
-    def _handle_finished(self) -> None:
+    def _handle_finished(self, model_key: str) -> None:
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
-        self.progress_label.setText("Download completed.")
-        self.download_button.setEnabled(True)
+        model = next((item for item in self._models if item.key == model_key), None)
+        label = model.label if model is not None else model_key
+        self.progress_label.setText(f"{label}: download completed")
         self.close_button.setEnabled(True)
+        self._active_model_key = None
         self._refresh_rows()
 
     def _handle_failed(self, message: str) -> None:
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_label.setText("Download failed.")
-        self.download_button.setEnabled(True)
         self.close_button.setEnabled(True)
+        self._active_model_key = None
         self._refresh_rows()
         QMessageBox.critical(self, "Download Failed", message)
 
@@ -173,24 +184,39 @@ class ModelManagementDialog(QDialog):
             self._download_thread = None
 
     def _refresh_rows(self, active_file: str | None = None) -> None:
+        download_running = self._active_model_key is not None
         for model in self._models:
-            status_label, detail_label = self._row_widgets[model.key]
+            button, status_label, detail_label = self._row_widgets[model.key]
             checkpoint_ready = model.checkpoint_path.exists()
             config_ready = model.config_path.exists()
+
             if checkpoint_ready and config_ready:
                 status_label.setText("Ready")
                 detail_label.setText("checkpoint / config present")
-            else:
-                status_label.setText("Missing")
-                missing = []
-                if not checkpoint_ready:
-                    missing.append(model.checkpoint_name)
-                if not config_ready:
-                    missing.append(model.config_name)
+                button.setText("Ready")
+                button.setEnabled(False)
+                continue
+
+            missing = []
+            if not checkpoint_ready:
+                missing.append(model.checkpoint_name)
+            if not config_ready:
+                missing.append(model.config_name)
+
+            if self._active_model_key == model.key:
+                status_label.setText("Downloading")
+                button.setText("Downloading...")
+                button.setEnabled(False)
                 if active_file is not None and active_file in missing:
                     detail_label.setText(f"downloading: {active_file}")
                 else:
                     detail_label.setText("missing: " + ", ".join(missing))
+                continue
+
+            status_label.setText("Missing")
+            detail_label.setText("missing: " + ", ".join(missing))
+            button.setText("Download")
+            button.setEnabled(not download_running)
 
     def _format_bytes(self, size: int) -> str:
         value = float(size)
