@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
             return
         if self.state.selected_model_key in self.available_model_keys:
             return
-        self.state.selected_model_key = next(iter(self.available_model_keys), None)
+        self.state.selected_model_key = next((model.key for model in SUPPORTED_MODELS if model.key in self.available_model_keys), None)
 
     def _build_ui(self) -> None:
         scroll_area = QScrollArea(self)
@@ -288,13 +288,9 @@ class MainWindow(QMainWindow):
         self.model_combo.currentIndexChanged.connect(self._handle_model_changed)
         self.manage_models_button = QPushButton("モデル管理", model_group)
         self.manage_models_button.clicked.connect(self._handle_manage_models)
-        self.model_status_label = QLabel(model_group)
-        self.model_status_label.setObjectName("metaLabel")
-        self.model_status_label.setWordWrap(True)
 
         model_layout.addWidget(self.model_combo)
         model_layout.addWidget(self.manage_models_button)
-        model_layout.addWidget(self.model_status_label)
 
         status_group = QGroupBox("State", sidebar)
         status_layout = QGridLayout(status_group)
@@ -355,7 +351,7 @@ class MainWindow(QMainWindow):
             if index >= 0:
                 self.model_combo.setCurrentIndex(index)
         elif self.available_model_keys:
-            first_available = next(iter(self.available_model_keys))
+            first_available = next((model.key for model in SUPPORTED_MODELS if model.key in self.available_model_keys), None)
             index = self.model_combo.findData(first_available)
             if index >= 0:
                 self.model_combo.setCurrentIndex(index)
