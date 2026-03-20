@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from image_bg_remover.config import SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_MODELS
+from image_bg_remover.ui.model_management import ModelManagementDialog
 from image_bg_remover.inference import InferenceResult, SamInferenceEngine
 from image_bg_remover.masking import apply_mask_to_image
 from image_bg_remover.state import AppState, ImageViewportMapping
@@ -121,8 +122,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.state = AppState()
         self.inference_running = False
-        self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.checkpoint_path.exists()}
-        self.state.selected_model_key = next(iter(self.available_model_keys), None)
+        self.available_model_keys: set[str] = set()
+        self._refresh_available_models(update_selection=True)
 
         self.inference_thread = QThread(self)
         self.inference_worker = InferenceWorker()
@@ -140,12 +141,20 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
-        self.statusBar().showMessage("Phase 8 save ready")
+        self.statusBar().showMessage("Phase 9 model download ready")
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self.inference_thread.quit()
         self.inference_thread.wait(3000)
         super().closeEvent(event)
+
+    def _refresh_available_models(self, update_selection: bool = False) -> None:
+        self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.is_available()}
+        if not update_selection:
+            return
+        if self.state.selected_model_key in self.available_model_keys:
+            return
+        self.state.selected_model_key = next(iter(self.available_model_keys), None)
 
     def _build_ui(self) -> None:
         scroll_area = QScrollArea(self)
@@ -442,12 +451,15 @@ class MainWindow(QMainWindow):
     def _handle_manage_models(self) -> None:
         if self.inference_running:
             return
-        available = ", ".join(sorted(self.available_model_keys)) or "なし"
-        QMessageBox.information(
-            self,
-            "モデル管理",
-            f"利用可能モデル: {available}\nダウンロード UI はフェーズ9で実装します。",
-        )
+        dialog = ModelManagementDialog(SUPPORTED_MODELS, self)
+        dialog.exec()
+        self._refresh_available_models(update_selection=True)
+        self._populate_models()
+        self._sync_ui()
+        if self.available_model_keys:
+            self.statusBar().showMessage("Model list refreshed")
+        else:
+            self.statusBar().showMessage("No models available")
 
     def _handle_model_changed(self, index: int) -> None:
         if index < 0:
@@ -513,10 +525,11 @@ class MainWindow(QMainWindow):
         has_result = self.state.background_removed and self.state.background_removed_image is not None
         has_mapping = self.state.image_mapping is not None
         idle = not self.inference_running
+        has_available_model = self.state.selected_model_key in self.available_model_keys if self.state.selected_model_key is not None else False
 
         self.load_button.setEnabled(idle)
         self.reset_button.setEnabled(idle and (has_image or has_mask or has_result))
-        self.create_mask_button.setEnabled(idle and has_image)
+        self.create_mask_button.setEnabled(idle and has_image and has_available_model)
         self.remove_background_button.setEnabled(idle and has_mask)
         self.save_result_button.setEnabled(idle and has_result)
         self.model_combo.setEnabled(idle)

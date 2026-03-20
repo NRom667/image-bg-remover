@@ -7,6 +7,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = PROJECT_ROOT / "models" / "sam2"
 SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+RAW_CONFIG_BASE_URL = "https://raw.githubusercontent.com/facebookresearch/sam2/main/sam2/configs/sam2.1"
+CHECKPOINT_BASE_URL = "https://dl.fbaipublicfiles.com/segment_anything_2/092824"
 
 
 @dataclass(frozen=True)
@@ -15,6 +17,8 @@ class ModelDefinition:
     label: str
     checkpoint_name: str
     config_name: str
+    checkpoint_url: str
+    config_url: str
 
     @property
     def checkpoint_path(self) -> Path:
@@ -24,6 +28,9 @@ class ModelDefinition:
     def config_path(self) -> Path:
         return MODELS_DIR / self.config_name
 
+    def is_available(self) -> bool:
+        return self.checkpoint_path.exists() and self.config_path.exists()
+
 
 SUPPORTED_MODELS = (
     ModelDefinition(
@@ -31,24 +38,32 @@ SUPPORTED_MODELS = (
         label="tiny",
         checkpoint_name="sam2.1_hiera_tiny.pt",
         config_name="sam2.1_hiera_t.yaml",
+        checkpoint_url=f"{CHECKPOINT_BASE_URL}/sam2.1_hiera_tiny.pt",
+        config_url=f"{RAW_CONFIG_BASE_URL}/sam2.1_hiera_t.yaml",
     ),
     ModelDefinition(
         key="small",
         label="small",
         checkpoint_name="sam2.1_hiera_small.pt",
         config_name="sam2.1_hiera_s.yaml",
+        checkpoint_url=f"{CHECKPOINT_BASE_URL}/sam2.1_hiera_small.pt",
+        config_url=f"{RAW_CONFIG_BASE_URL}/sam2.1_hiera_s.yaml",
     ),
     ModelDefinition(
         key="base_plus",
         label="base+",
         checkpoint_name="sam2.1_hiera_base_plus.pt",
         config_name="sam2.1_hiera_b+.yaml",
+        checkpoint_url=f"{CHECKPOINT_BASE_URL}/sam2.1_hiera_base_plus.pt",
+        config_url=f"{RAW_CONFIG_BASE_URL}/sam2.1_hiera_b%2B.yaml",
     ),
     ModelDefinition(
         key="large",
         label="large",
         checkpoint_name="sam2.1_hiera_large.pt",
         config_name="sam2.1_hiera_l.yaml",
+        checkpoint_url=f"{CHECKPOINT_BASE_URL}/sam2.1_hiera_large.pt",
+        config_url=f"{RAW_CONFIG_BASE_URL}/sam2.1_hiera_l.yaml",
     ),
 )
 
