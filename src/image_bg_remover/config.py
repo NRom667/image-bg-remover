@@ -51,3 +51,12 @@ SUPPORTED_MODELS = (
         config_name="sam2.1_hiera_l.yaml",
     ),
 )
+
+
+def get_model_definition(model_key: str | None) -> ModelDefinition | None:
+    if model_key is None:
+        return None
+    for model in SUPPORTED_MODELS:
+        if model.key == model_key:
+            return model
+    return None

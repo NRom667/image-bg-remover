@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QImage, QPainter
+from PySide6.QtCore import QObject, QThread, Qt, Signal
+from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from image_bg_remover.config import SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_MODELS
-from image_bg_remover.masking import build_dummy_mask, build_mask_overlay
+from image_bg_remover.inference import InferenceResult, SamInferenceEngine
 from image_bg_remover.state import AppState, ImageViewportMapping
 from image_bg_remover.ui.image_preview import ImagePreviewWidget
 
@@ -58,10 +58,40 @@ class ResultPreviewPanel(QFrame):
                 painter.end()
 
 
+class InferenceWorker(QObject):
+    finished = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, engine: SamInferenceEngine, model_key: str, source_image: QImage, foreground_points, background_points) -> None:
+        super().__init__()
+        self._engine = engine
+        self._model_key = model_key
+        self._source_image = source_image
+        self._foreground_points = list(foreground_points)
+        self._background_points = list(background_points)
+
+    def run(self) -> None:
+        try:
+            result = self._engine.predict_mask(
+                self._model_key,
+                self._source_image,
+                self._foreground_points,
+                self._background_points,
+            )
+        except Exception as exc:
+            self.failed.emit(str(exc))
+            return
+        self.finished.emit(result)
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.state = AppState()
+        self.inference_engine = SamInferenceEngine()
+        self.inference_thread: QThread | None = None
+        self.inference_worker: InferenceWorker | None = None
+        self.inference_running = False
         self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.checkpoint_path.exists()}
         self.state.selected_model_key = next(iter(self.available_model_keys), None)
 
@@ -73,7 +103,7 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
-        self.statusBar().showMessage("Phase 5 mask state ready")
+        self.statusBar().showMessage("Phase 6 SAM2.1 inference ready")
 
     def _build_ui(self) -> None:
         scroll_area = QScrollArea(self)
@@ -202,6 +232,7 @@ class MainWindow(QMainWindow):
         self.foreground_count_value = QLabel(status_group)
         self.background_count_value = QLabel(status_group)
         self.mask_data_value = QLabel(status_group)
+        self.busy_value = QLabel(status_group)
 
         status_layout.addWidget(QLabel("画像", status_group), 0, 0)
         status_layout.addWidget(self.image_state_value, 0, 1)
@@ -217,6 +248,8 @@ class MainWindow(QMainWindow):
         status_layout.addWidget(self.background_count_value, 5, 1)
         status_layout.addWidget(QLabel("マスク画像", status_group), 6, 0)
         status_layout.addWidget(self.mask_data_value, 6, 1)
+        status_layout.addWidget(QLabel("処理中", status_group), 7, 0)
+        status_layout.addWidget(self.busy_value, 7, 1)
 
         layout.addWidget(title)
         layout.addWidget(self.load_button)
@@ -251,6 +284,9 @@ class MainWindow(QMainWindow):
         self.model_combo.blockSignals(False)
 
     def _handle_load_image(self) -> None:
+        if self.inference_running:
+            return
+
         file_filter = "Images (*.jpg *.jpeg *.png)"
         selected_file, _ = QFileDialog.getOpenFileName(
             self,
@@ -279,6 +315,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"画像を読み込みました: {image_path.name}")
 
     def _handle_reset(self) -> None:
+        if self.inference_running:
+            return
         self.state.full_reset()
         self.input_preview.set_image(None)
         self.input_preview.set_mask_overlay(None)
@@ -287,30 +325,59 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("状態をリセットしました")
 
     def _handle_create_mask(self) -> None:
+        if self.inference_running:
+            return
         if not self.state.image_loaded or self.state.source_image is None:
+            return
+        if self.state.selected_model_key is None:
+            QMessageBox.warning(self, "モデル未選択", "利用可能なモデルを選択してください。")
             return
         if not self.state.foreground_points and not self.state.background_points:
             QMessageBox.information(self, "マスク作成", "先に前景点または背景点を追加してください。")
             return
 
-        mask = build_dummy_mask(self.state.source_image, self.state.foreground_points, self.state.background_points)
-        overlay = build_mask_overlay(mask)
-        self.state.set_mask(mask, overlay)
-        self.input_preview.set_mask_overlay(overlay)
-        self._sync_ui()
-        self.statusBar().showMessage("ダミーマスクを作成しました")
+        self._set_inference_running(True)
+        self.statusBar().showMessage(f"{self.model_combo.currentText()} でマスクを作成中...")
+
+        worker = InferenceWorker(
+            self.inference_engine,
+            self.state.selected_model_key,
+            self.state.source_image.copy(),
+            self.state.foreground_points,
+            self.state.background_points,
+        )
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._handle_inference_finished)
+        worker.failed.connect(self._handle_inference_failed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+
+        self.inference_worker = worker
+        self.inference_thread = thread
+        thread.start()
 
     def _handle_remove_background(self) -> None:
+        if self.inference_running:
+            return
         if not self.state.mask_created:
             return
         self.statusBar().showMessage("背景削除処理はフェーズ7で実装します")
 
     def _handle_save_result(self) -> None:
+        if self.inference_running:
+            return
         if not self.state.background_removed:
             return
         self.statusBar().showMessage("保存処理はフェーズ8で実装します")
 
     def _handle_manage_models(self) -> None:
+        if self.inference_running:
+            return
         available = ", ".join(sorted(self.available_model_keys)) or "なし"
         QMessageBox.information(
             self,
@@ -330,7 +397,7 @@ class MainWindow(QMainWindow):
         self._sync_ui()
 
     def _handle_preview_interaction(self, button, image_x: float, image_y: float, delete_threshold: float) -> None:
-        if not self.state.image_loaded:
+        if not self.state.image_loaded or self.inference_running:
             return
 
         if button == Qt.MouseButton.LeftButton:
@@ -353,16 +420,43 @@ class MainWindow(QMainWindow):
         self.input_preview.set_points(self.state.foreground_points, self.state.background_points)
         self._sync_ui()
 
+    def _handle_inference_finished(self, result: InferenceResult) -> None:
+        self.state.set_mask(result.mask, result.overlay)
+        self.input_preview.set_mask_overlay(result.overlay)
+        self._set_inference_running(False)
+        self._sync_ui()
+        self.statusBar().showMessage(f"マスクを作成しました: model={result.model_key}, score={result.score:.3f}")
+
+    def _handle_inference_failed(self, message: str) -> None:
+        self._set_inference_running(False)
+        self._sync_ui()
+        QMessageBox.critical(self, "マスク作成失敗", message)
+        self.statusBar().showMessage("マスク作成に失敗しました")
+
+    def _set_inference_running(self, running: bool) -> None:
+        self.inference_running = running
+        if running:
+            QGuiApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        else:
+            QGuiApplication.restoreOverrideCursor()
+            self.inference_thread = None
+            self.inference_worker = None
+        self._sync_ui()
+
     def _sync_ui(self) -> None:
         has_image = self.state.image_loaded and self.state.source_image is not None
         has_mask = self.state.mask_created and self.state.current_mask is not None
         has_result = self.state.background_removed and self.state.background_removed_image is not None
         has_mapping = self.state.image_mapping is not None
+        idle = not self.inference_running
 
-        self.reset_button.setEnabled(has_image or has_mask or has_result)
-        self.create_mask_button.setEnabled(has_image)
-        self.remove_background_button.setEnabled(has_mask)
-        self.save_result_button.setEnabled(has_result)
+        self.load_button.setEnabled(idle)
+        self.reset_button.setEnabled(idle and (has_image or has_mask or has_result))
+        self.create_mask_button.setEnabled(idle and has_image)
+        self.remove_background_button.setEnabled(idle and has_mask)
+        self.save_result_button.setEnabled(idle and has_result)
+        self.model_combo.setEnabled(idle)
+        self.manage_models_button.setEnabled(idle)
 
         self.image_state_value.setText("読込済み" if has_image else "未読込")
         self.mask_state_value.setText("作成済み" if has_mask else "未作成")
@@ -371,6 +465,7 @@ class MainWindow(QMainWindow):
         self.foreground_count_value.setText(str(len(self.state.foreground_points)))
         self.background_count_value.setText(str(len(self.state.background_points)))
         self.mask_data_value.setText("あり" if self.state.current_mask is not None else "なし")
+        self.busy_value.setText("はい" if self.inference_running else "いいえ")
 
         self.result_preview.set_has_content(has_result)
 
@@ -391,8 +486,10 @@ class MainWindow(QMainWindow):
         else:
             self.image_info_label.setText("画像未読込")
 
-        if has_mask:
-            self.result_info_label.setText("ダミーマスクを保持中です。背景削除はフェーズ7で接続します")
+        if self.inference_running:
+            self.result_info_label.setText("SAM2.1 でマスク作成中です")
+        elif has_mask:
+            self.result_info_label.setText("SAM2.1 マスクを保持中です。背景削除はフェーズ7で接続します")
         elif has_result:
             self.result_info_label.setText("保存可能な結果があります")
         else:
@@ -460,7 +557,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #bfa98a;
                 background: #fff6e8;
             }
-            QPushButton:disabled {
+            QPushButton:disabled, QComboBox:disabled {
                 color: #9aa5b1;
                 background: #f4efe6;
                 border: 1px solid #e0d7ca;
