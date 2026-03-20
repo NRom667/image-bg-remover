@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPen, QPixmap, QWheelEvent, QWheelEvent
+from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -44,7 +44,10 @@ from image_bg_remover.ui.theme import (
     COLOR_TEXT_MUTED,
     COLOR_TEXT_PRIMARY,
     COLOR_TEXT_SECONDARY,
+    COLOR_BG_APP,
     SIDEBAR_WIDTH,
+
+
     main_window_stylesheet,
     message_box_stylesheet,
     qcolor,
@@ -308,21 +311,28 @@ class MainWindow(QMainWindow):
         self.state.selected_model_key = next((model.key for model in SUPPORTED_MODELS if model.key in self.available_model_keys), None)
 
     def _build_ui(self) -> None:
-        scroll_area = QScrollArea(self)
-        scroll_area.setObjectName("windowScrollArea")
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-
-        scroll_content = QWidget(scroll_area)
-        scroll_content.setObjectName("scrollContent")
-        root_layout = QHBoxLayout(scroll_content)
+        central = QWidget(self)
+        central.setObjectName("windowRoot")
+        root_layout = QHBoxLayout(central)
         root_layout.setContentsMargins(24, 24, 24, 24)
         root_layout.setSpacing(20)
-        root_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        content_layout = QVBoxLayout()
+        content_scroll_area = QScrollArea(central)
+        content_scroll_area.setObjectName("windowScrollArea")
+        content_scroll_area.setWidgetResizable(True)
+        content_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        content_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        content_scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        content_viewport_palette = content_scroll_area.viewport().palette()
+        content_viewport_palette.setColor(QPalette.ColorRole.Window, qcolor(COLOR_BG_APP))
+        content_scroll_area.viewport().setPalette(content_viewport_palette)
+        content_scroll_area.viewport().setAutoFillBackground(True)
+
+        scroll_content = QWidget(content_scroll_area)
+        scroll_content.setObjectName("scrollContent")
+        content_layout = QVBoxLayout(scroll_content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(18)
         content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -338,7 +348,6 @@ class MainWindow(QMainWindow):
         self.input_preview.setMinimumHeight(600)
         self.input_preview.mapping_changed.connect(self._handle_mapping_changed)
         self.input_preview.interaction_requested.connect(self._handle_preview_interaction)
-
 
         input_layout.addWidget(self.input_preview)
 
@@ -356,14 +365,36 @@ class MainWindow(QMainWindow):
 
         content_layout.addWidget(input_group, stretch=4)
         content_layout.addWidget(result_group, stretch=2)
+        content_layout.addItem(QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+
+        content_scroll_area.setWidget(scroll_content)
+
+        sidebar_scroll_area = QScrollArea(central)
+        sidebar_scroll_area.setObjectName("sidebarScrollArea")
+        sidebar_scroll_area.setWidgetResizable(True)
+        sidebar_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        sidebar_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        sidebar_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        sidebar_scroll_area.setFixedWidth(SIDEBAR_WIDTH + 18)
+        sidebar_scroll_area.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        sidebar_scroll_area.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        sidebar_palette = sidebar_scroll_area.palette()
+        sidebar_palette.setColor(QPalette.ColorRole.Window, qcolor(COLOR_BG_APP))
+        sidebar_scroll_area.setPalette(sidebar_palette)
+        sidebar_scroll_area.setAutoFillBackground(True)
+        sidebar_viewport_palette = sidebar_scroll_area.viewport().palette()
+        sidebar_viewport_palette.setColor(QPalette.ColorRole.Window, qcolor(COLOR_BG_APP))
+        sidebar_scroll_area.viewport().setPalette(sidebar_viewport_palette)
+        sidebar_scroll_area.viewport().setAutoFillBackground(True)
 
         sidebar = self._build_sidebar()
+        sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+        sidebar_scroll_area.setWidget(sidebar)
 
-        root_layout.addLayout(content_layout, stretch=4)
-        root_layout.addWidget(sidebar, stretch=0, alignment=Qt.AlignmentFlag.AlignTop)
+        root_layout.addWidget(content_scroll_area, stretch=1)
+        root_layout.addWidget(sidebar_scroll_area, stretch=0)
 
-        scroll_area.setWidget(scroll_content)
-        self.setCentralWidget(scroll_area)
+        self.setCentralWidget(central)
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QFrame(self)
@@ -699,6 +730,9 @@ class MainWindow(QMainWindow):
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(main_window_stylesheet())
+
+
+
 
 
 

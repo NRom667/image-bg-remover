@@ -104,7 +104,14 @@ def main_window_stylesheet() -> str:
     QMainWindow {{
         background: {COLOR_BG_APP};
     }}
+    QWidget#windowRoot {{
+        background: {COLOR_BG_APP};
+    }}
     QScrollArea#windowScrollArea {{
+        border: none;
+        background: {COLOR_BG_APP};
+    }}
+    QScrollArea#sidebarScrollArea {{
         border: none;
         background: {COLOR_BG_APP};
     }}
@@ -286,3 +293,5 @@ def dialog_stylesheet() -> str:
 
 def qcolor(value: str) -> QColor:
     return QColor(value)
+
+
