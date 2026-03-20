@@ -35,7 +35,7 @@ class ModelDefinition:
 SUPPORTED_MODELS = (
     ModelDefinition(
         key='tiny',
-        label='tiny',
+        label='tiny　超高速',
         checkpoint_name='sam2.1_hiera_tiny.pt',
         config_name='sam2.1_hiera_t.yaml',
         checkpoint_url=f'{CHECKPOINT_BASE_URL}/sam2.1_hiera_tiny.pt',
@@ -43,7 +43,7 @@ SUPPORTED_MODELS = (
     ),
     ModelDefinition(
         key='small',
-        label='small',
+        label='small　高速',
         checkpoint_name='sam2.1_hiera_small.pt',
         config_name='sam2.1_hiera_s.yaml',
         checkpoint_url=f'{CHECKPOINT_BASE_URL}/sam2.1_hiera_small.pt',
@@ -51,7 +51,7 @@ SUPPORTED_MODELS = (
     ),
     ModelDefinition(
         key='base_plus',
-        label='base+',
+        label='base+　オススメ',
         checkpoint_name='sam2.1_hiera_base_plus.pt',
         config_name='sam2.1_hiera_b+.yaml',
         checkpoint_url=f'{CHECKPOINT_BASE_URL}/sam2.1_hiera_base_plus.pt',
@@ -59,7 +59,7 @@ SUPPORTED_MODELS = (
     ),
     ModelDefinition(
         key='large',
-        label='large',
+        label='large　高精度',
         checkpoint_name='sam2.1_hiera_large.pt',
         config_name='sam2.1_hiera_l.yaml',
         checkpoint_url=f'{CHECKPOINT_BASE_URL}/sam2.1_hiera_large.pt',

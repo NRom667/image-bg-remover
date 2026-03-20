@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -65,17 +65,20 @@ class ModelManagementDialog(QDialog):
         grid_layout.setContentsMargins(12, 12, 12, 12)
         grid_layout.setHorizontalSpacing(14)
         grid_layout.setVerticalSpacing(10)
-        grid_layout.addWidget(QLabel("Download", grid_frame), 0, 0)
-        grid_layout.addWidget(QLabel("Model", grid_frame), 0, 1)
-        grid_layout.addWidget(QLabel("Status", grid_frame), 0, 2)
-        grid_layout.addWidget(QLabel("Details", grid_frame), 0, 3)
+        for column, title in enumerate(("Download", "Model", "Status", "Details")):
+            header_label = QLabel(title, grid_frame)
+            header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            grid_layout.addWidget(header_label, 0, column)
 
         for row, model in enumerate(self._models, start=1):
             download_button = QPushButton("Download", grid_frame)
             download_button.clicked.connect(lambda checked=False, key=model.key: self._start_download_for_model(key))
             name_label = QLabel(model.label, grid_frame)
+            name_label.setMargin(8)
             status_label = QLabel(grid_frame)
+            status_label.setMargin(8)
             detail_label = QLabel(grid_frame)
+            detail_label.setMargin(8)
             detail_label.setWordWrap(True)
             self._row_widgets[model.key] = (download_button, status_label, detail_label)
             grid_layout.addWidget(download_button, row, 0)

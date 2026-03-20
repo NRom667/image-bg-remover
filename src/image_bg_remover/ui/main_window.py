@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPixmap
+from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPixmap, QPen
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -88,6 +88,25 @@ class ResultPreviewPanel(QFrame):
                 col += 1
             y += tile
             row += 1
+
+
+class ModelComboBox(QComboBox):
+    def paintEvent(self, event) -> None:  # noqa: N802
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            arrow_color = QColor("#7c5e3c") if self.isEnabled() else QColor("#9aa5b1")
+            painter.setPen(QPen(arrow_color, 2.0, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+
+            center_x = self.width() - 20
+            center_y = self.height() // 2 + 1
+            painter.drawLine(center_x - 5, center_y - 3, center_x, center_y + 2)
+            painter.drawLine(center_x, center_y + 2, center_x + 5, center_y - 3)
+        finally:
+            if painter.isActive():
+                painter.end()
 
 
 class InferenceWorker(QObject):
@@ -284,7 +303,7 @@ class MainWindow(QMainWindow):
         model_layout = QVBoxLayout(model_group)
         model_layout.setSpacing(10)
 
-        self.model_combo = QComboBox(model_group)
+        self.model_combo = ModelComboBox(model_group)
         self.model_combo.currentIndexChanged.connect(self._handle_model_changed)
         self.manage_models_button = QPushButton("モデル管理", model_group)
         self.manage_models_button.clicked.connect(self._handle_manage_models)
@@ -638,6 +657,9 @@ class MainWindow(QMainWindow):
                 background: #fffdf8;
                 color: #102a43;
                 font-size: 14px;
+            }
+            QComboBox {
+                padding-right: 36px;
             }
             QPushButton:hover, QComboBox:hover {
                 border: 1px solid #bfa98a;
