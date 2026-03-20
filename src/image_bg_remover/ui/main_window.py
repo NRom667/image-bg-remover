@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPixmap, QPen
+from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -19,6 +19,9 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpacerItem,
+    QStyle,
+    QStyleOptionViewItem,
+    QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
@@ -109,6 +112,49 @@ class ModelComboBox(QComboBox):
                 painter.end()
 
 
+class ModelComboItemDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index) -> None:
+        item_option = QStyleOptionViewItem(option)
+        self.initStyleOption(item_option, index)
+
+        full_label = item_option.text
+        if "\u3000" in full_label:
+            model_name, description = full_label.split("\u3000", 1)
+        else:
+            model_name, description = full_label, ""
+
+        is_selected = bool(item_option.state & QStyle.StateFlag.State_Selected)
+        background_color = QColor("#f7efe1") if is_selected else QColor("#fffdf8")
+        border_color = QColor("#eadfce") if is_selected else QColor("#fffdf8")
+        name_color = QColor("#102a43")
+        description_color = QColor("#486581")
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(item_option.rect, background_color)
+        painter.setPen(border_color)
+        painter.drawLine(item_option.rect.bottomLeft(), item_option.rect.bottomRight())
+
+        text_rect = item_option.rect.adjusted(12, 0, -12, 0)
+        name_width = 64
+        gap = 16
+        name_rect = text_rect.adjusted(0, 0, -(max(0, text_rect.width() - name_width)), 0)
+        description_rect = text_rect.adjusted(name_width + gap, 0, 0, 0)
+
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        painter.setPen(name_color)
+        painter.drawText(name_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, model_name)
+        if description:
+            painter.setPen(description_color)
+            painter.drawText(description_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, description)
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setHeight(max(size.height(), 34))
+        return size
+
+
 class InferenceWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
@@ -174,6 +220,39 @@ class MainWindow(QMainWindow):
         self.inference_thread.wait(3000)
         super().closeEvent(event)
 
+    def _show_message_box(self, icon: QMessageBox.Icon, title: str, text: str) -> None:
+        message_box = QMessageBox(self)
+        message_box.setIcon(icon)
+        message_box.setWindowTitle(title)
+        message_box.setText(text)
+        message_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        message_box.setStyleSheet(
+            """
+            QMessageBox {
+                background: #f8f3ea;
+            }
+            QMessageBox QLabel {
+                color: #102a43;
+                font-size: 14px;
+            }
+            QMessageBox QPushButton {
+                min-width: 88px;
+                min-height: 38px;
+                border-radius: 12px;
+                border: 1px solid #d9cdbb;
+                padding: 8px 16px;
+                background: #fffdf8;
+                color: #102a43;
+                font-size: 14px;
+            }
+            QMessageBox QPushButton:hover {
+                border: 1px solid #bfa98a;
+                background: #fff6e8;
+            }
+            """
+        )
+        message_box.exec()
+
     def _open_model_management_for_missing_models(self) -> None:
         if self.inference_running:
             return
@@ -185,8 +264,8 @@ class MainWindow(QMainWindow):
         if self.available_model_keys:
             self.statusBar().showMessage("モデルを利用可能にしました")
         else:
-            QMessageBox.information(
-                self,
+            self._show_message_box(
+                QMessageBox.Icon.Information,
                 "モデル未配置",
                 "利用可能なモデルが見つかりません。モデル管理から少なくとも1つダウンロードしてください。",
             )
@@ -304,6 +383,7 @@ class MainWindow(QMainWindow):
         model_layout.setSpacing(10)
 
         self.model_combo = ModelComboBox(model_group)
+        self.model_combo.setItemDelegate(ModelComboItemDelegate(self.model_combo))
         self.model_combo.currentIndexChanged.connect(self._handle_model_changed)
         self.manage_models_button = QPushButton("モデル管理", model_group)
         self.manage_models_button.clicked.connect(self._handle_manage_models)
@@ -395,12 +475,12 @@ class MainWindow(QMainWindow):
 
         image_path = Path(selected_file)
         if image_path.suffix.lower() not in SUPPORTED_IMAGE_EXTENSIONS:
-            QMessageBox.warning(self, "非対応形式", "jpg/jpeg/png のみ対応しています。")
+            self._show_message_box(QMessageBox.Icon.Warning, "非対応形式", "jpg/jpeg/png のみ対応しています。")
             return
 
         image = QImage(str(image_path))
         if image.isNull():
-            QMessageBox.warning(self, "読込失敗", "画像を読み込めませんでした。")
+            self._show_message_box(QMessageBox.Icon.Warning, "読込失敗", "画像を読み込めませんでした。")
             return
 
         self.state.set_image(image_path, image)
@@ -426,13 +506,13 @@ class MainWindow(QMainWindow):
         if self.inference_running:
             return
         if not self.state.image_loaded or self.state.source_image is None:
-            QMessageBox.information(self, "画像未読込", "先に画像を読み込んでください。")
+            self._show_message_box(QMessageBox.Icon.Information, "画像未読込", "先に画像を読み込んでください。")
             return
         if self.state.selected_model_key is None:
-            QMessageBox.warning(self, "モデル未選択", "利用可能なモデルを選択してください。")
+            self._show_message_box(QMessageBox.Icon.Warning, "モデル未選択", "利用可能なモデルを選択してください。")
             return
         if not self.state.foreground_points and not self.state.background_points:
-            QMessageBox.information(self, "マスク作成", "先に前景点または背景点を追加してください。")
+            self._show_message_box(QMessageBox.Icon.Information, "マスク作成", "先に前景点または背景点を追加してください。")
             return
 
         self._set_inference_running(True)
@@ -448,7 +528,7 @@ class MainWindow(QMainWindow):
         if self.inference_running:
             return
         if self.state.current_mask is None or self.state.source_image is None:
-            QMessageBox.information(self, "マスク未作成", "先に[マスク作成]を実行してください。")
+            self._show_message_box(QMessageBox.Icon.Information, "マスク未作成", "先に[マスク作成]を実行してください。")
             return
 
         result_image = apply_mask_to_image(self.state.source_image, self.state.current_mask)
@@ -461,7 +541,7 @@ class MainWindow(QMainWindow):
         if self.inference_running:
             return
         if self.state.background_removed_image is None:
-            QMessageBox.information(self, "保存対象なし", "先に[背景を削除]を実行してください。")
+            self._show_message_box(QMessageBox.Icon.Information, "保存対象なし", "先に[背景を削除]を実行してください。")
             return
 
         default_path = self._build_default_save_path()
@@ -480,7 +560,7 @@ class MainWindow(QMainWindow):
 
         success = self.state.background_removed_image.save(str(save_path), "PNG")
         if not success:
-            QMessageBox.critical(self, "保存失敗", "透過PNGの保存に失敗しました。")
+            self._show_message_box(QMessageBox.Icon.Critical, "保存失敗", "透過PNGの保存に失敗しました。")
             self.statusBar().showMessage("保存に失敗しました")
             return
 
@@ -552,7 +632,7 @@ class MainWindow(QMainWindow):
     def _handle_inference_failed(self, message: str) -> None:
         self._set_inference_running(False)
         self._sync_ui()
-        QMessageBox.critical(self, "マスク作成失敗", message)
+        self._show_message_box(QMessageBox.Icon.Critical, "マスク作成失敗", message)
         self.statusBar().showMessage("マスク作成に失敗しました")
 
     def _set_inference_running(self, running: bool) -> None:
@@ -660,6 +740,16 @@ class MainWindow(QMainWindow):
             }
             QComboBox {
                 padding-right: 36px;
+            }
+            QComboBox QAbstractItemView {
+                background: #fffdf8;
+                color: #102a43;
+                border: 1px solid #d9cdbb;
+                border-radius: 12px;
+                padding: 6px;
+                selection-background-color: #f7efe1;
+                selection-color: #102a43;
+                outline: 0;
             }
             QPushButton:hover, QComboBox:hover {
                 border: 1px solid #bfa98a;
