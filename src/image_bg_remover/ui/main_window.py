@@ -36,8 +36,8 @@ class ResultPreviewPanel(QFrame):
         super().__init__(parent)
         self._image: QImage | None = None
         self._pixmap: QPixmap | None = None
-        self.setMinimumHeight(180)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setMinimumHeight(520)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def set_image(self, image: QImage | None) -> None:
         self._image = image
@@ -209,16 +209,12 @@ class MainWindow(QMainWindow):
             placeholder_text="[画像読込] から jpg/png を1枚選択すると、ここに原画像を表示します。",
             parent=input_group,
         )
-        self.input_preview.setMinimumHeight(360)
+        self.input_preview.setMinimumHeight(600)
         self.input_preview.mapping_changed.connect(self._handle_mapping_changed)
         self.input_preview.interaction_requested.connect(self._handle_preview_interaction)
 
-        self.image_info_label = QLabel("画像未読込", input_group)
-        self.image_info_label.setObjectName("metaLabel")
-        self.image_info_label.setWordWrap(True)
 
         input_layout.addWidget(self.input_preview)
-        input_layout.addWidget(self.image_info_label)
 
         result_group = QGroupBox("Background Removed Preview", scroll_content)
         result_layout = QVBoxLayout(result_group)
@@ -578,23 +574,6 @@ class MainWindow(QMainWindow):
         self.busy_value.setText("はい" if self.inference_running else "いいえ")
 
         self.result_preview.set_image(self.state.background_removed_image)
-
-        if has_image and self.state.source_image is not None and self.state.image_path is not None:
-            source = self.state.source_image
-            info_lines = [
-                f"ファイル: {self.state.image_path.name}",
-                f"原画像サイズ: {source.width()} x {source.height()}",
-                f"前景点: {len(self.state.foreground_points)} / 背景点: {len(self.state.background_points)}",
-            ]
-            if self.state.image_mapping is not None:
-                mapping = self.state.image_mapping
-                info_lines.append(f"表示サイズ: {mapping.display_width:.0f} x {mapping.display_height:.0f}")
-                info_lines.append(f"表示オフセット: ({mapping.display_x:.0f}, {mapping.display_y:.0f})")
-            if self.state.current_mask is not None:
-                info_lines.append(f"マスクサイズ: {self.state.current_mask.width()} x {self.state.current_mask.height()}")
-            self.image_info_label.setText("\n".join(info_lines))
-        else:
-            self.image_info_label.setText("画像未読込")
 
         if self.inference_running:
             self.result_info_label.setText("SAM2.1 でマスク作成中です")
