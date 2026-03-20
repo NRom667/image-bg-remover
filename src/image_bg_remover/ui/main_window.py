@@ -736,7 +736,7 @@ class MainWindow(QMainWindow):
                 padding: 8px 12px;
                 background: #fffdf8;
                 color: #102a43;
-                font-size: 14px;
+                font-size: 16px;
             }
             QComboBox {
                 padding-right: 36px;
