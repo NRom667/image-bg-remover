@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QImage, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from image_bg_remover.state import ImageViewportMapping, PromptPoint
@@ -78,6 +78,9 @@ class ImagePreviewWidget(QWidget):
 
             if self._pixmap is None or self._mapping is None:
                 painter.setPen(QColor("#7b8794"))
+                placeholder_font = QFont(self.font())
+                placeholder_font.setPointSize(16)
+                painter.setFont(placeholder_font)
                 painter.drawText(body_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self._placeholder_text)
                 return
 

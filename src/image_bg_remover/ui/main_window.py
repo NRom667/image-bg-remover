@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -62,6 +62,9 @@ class ResultPreviewPanel(QFrame):
 
             if self._pixmap is None:
                 painter.setPen(QColor("#7b8794"))
+                placeholder_font = QFont(self.font())
+                placeholder_font.setPointSize(16)
+                painter.setFont(placeholder_font)
                 painter.drawText(body_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, "結果プレビューは未生成です")
                 return
 
@@ -304,7 +307,7 @@ class MainWindow(QMainWindow):
         input_layout.setSpacing(10)
 
         self.input_preview = ImagePreviewWidget(
-            placeholder_text="[画像読込] から jpg/png を1枚選択すると、ここに原画像を表示します。",
+            placeholder_text="[画像読込] ボタンでjpg/png画像を読み込んでください",
             parent=input_group,
         )
         self.input_preview.setMinimumHeight(600)
@@ -737,6 +740,10 @@ class MainWindow(QMainWindow):
                 background: #fffdf8;
                 color: #102a43;
                 font-size: 16px;
+            }
+            QPushButton {
+                letter-spacing: 0.02em;
+                font-weight: 500;
             }
             QComboBox {
                 padding-right: 36px;
