@@ -375,48 +375,37 @@ class MainWindow(QMainWindow):
         title = QLabel("Control Panel", sidebar)
         title.setObjectName("sidebarTitle")
 
-        self.load_button = QPushButton("画像読込", sidebar)
+        workflow_group = QGroupBox("Workflow", sidebar)
+        workflow_layout = QVBoxLayout(workflow_group)
+        workflow_layout.setSpacing(10)
+
+        self.load_button = QPushButton("画像読込", workflow_group)
         self.load_button.clicked.connect(self._handle_load_image)
 
-        instruction = QLabel(
-            "左クリックで前景、右クリックで背景、中クリックでポイントを削除します",
-            sidebar,
-        )
-        instruction.setObjectName("instructionLabel")
-        instruction.setWordWrap(True)
+        self.model_combo = ModelComboBox(workflow_group)
+        self.model_combo.setItemDelegate(ModelComboItemDelegate(self.model_combo))
+        self.model_combo.currentIndexChanged.connect(self._handle_model_changed)
+
+        self.create_mask_button = QPushButton("マスク作成", workflow_group)
+        self.create_mask_button.setObjectName("primaryButton")
+        self.create_mask_button.clicked.connect(self._handle_create_mask)
+        self.remove_background_button = QPushButton("背景を削除", workflow_group)
+        self.remove_background_button.clicked.connect(self._handle_remove_background)
+        self.save_result_button = QPushButton("結果を保存", workflow_group)
+        self.save_result_button.clicked.connect(self._handle_save_result)
+
+        workflow_layout.addWidget(self.load_button)
+        workflow_layout.addWidget(self.model_combo)
+        workflow_layout.addWidget(self.create_mask_button)
+        workflow_layout.addWidget(self.remove_background_button)
+        workflow_layout.addWidget(self.save_result_button)
+
+        self.manage_models_button = QPushButton("モデル管理", sidebar)
+        self.manage_models_button.clicked.connect(self._handle_manage_models)
 
         self.reset_button = QPushButton("リセット", sidebar)
         self.reset_button.setObjectName("tertiaryButton")
         self.reset_button.clicked.connect(self._handle_reset)
-
-        action_group = QGroupBox("Actions", sidebar)
-        action_layout = QVBoxLayout(action_group)
-        action_layout.setSpacing(10)
-
-        self.create_mask_button = QPushButton("マスク作成", action_group)
-        self.create_mask_button.setObjectName("primaryButton")
-        self.create_mask_button.clicked.connect(self._handle_create_mask)
-        self.remove_background_button = QPushButton("背景を削除", action_group)
-        self.remove_background_button.clicked.connect(self._handle_remove_background)
-        self.save_result_button = QPushButton("結果を保存", action_group)
-        self.save_result_button.clicked.connect(self._handle_save_result)
-
-        action_layout.addWidget(self.create_mask_button)
-        action_layout.addWidget(self.remove_background_button)
-        action_layout.addWidget(self.save_result_button)
-
-        model_group = QGroupBox("Model", sidebar)
-        model_layout = QVBoxLayout(model_group)
-        model_layout.setSpacing(10)
-
-        self.model_combo = ModelComboBox(model_group)
-        self.model_combo.setItemDelegate(ModelComboItemDelegate(self.model_combo))
-        self.model_combo.currentIndexChanged.connect(self._handle_model_changed)
-        self.manage_models_button = QPushButton("モデル管理", model_group)
-        self.manage_models_button.clicked.connect(self._handle_manage_models)
-
-        model_layout.addWidget(self.model_combo)
-        model_layout.addWidget(self.manage_models_button)
 
         status_group = QGroupBox("State", sidebar)
         status_layout = QGridLayout(status_group)
@@ -450,11 +439,9 @@ class MainWindow(QMainWindow):
         status_layout.addWidget(self.busy_value, 7, 1)
 
         layout.addWidget(title)
-        layout.addWidget(self.load_button)
-        layout.addWidget(instruction)
+        layout.addWidget(workflow_group)
+        layout.addWidget(self.manage_models_button)
         layout.addWidget(self.reset_button)
-        layout.addWidget(action_group)
-        layout.addWidget(model_group)
         layout.addWidget(status_group)
         layout.addItem(QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
 
@@ -709,6 +696,8 @@ class MainWindow(QMainWindow):
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(main_window_stylesheet())
+
+
 
 
 

@@ -172,20 +172,6 @@ def main_window_stylesheet() -> str:
         background: {COLOR_BG_DISABLED};
         border: 1px solid {COLOR_BORDER_DISABLED};
     }}
-    QPushButton#primaryButton {{
-        background: {COLOR_ACCENT_PRIMARY};
-        border: 1px solid {COLOR_ACCENT_PRIMARY};
-        color: {COLOR_TEXT_ON_ACCENT};
-    }}
-    QPushButton#primaryButton:hover {{
-        background: {COLOR_ACCENT_PRIMARY_HOVER};
-        border: 1px solid {COLOR_ACCENT_PRIMARY_HOVER};
-    }}
-    QPushButton#primaryButton:disabled {{
-        background: {COLOR_BG_DISABLED};
-        border: 1px solid {COLOR_BORDER_DISABLED};
-        color: {COLOR_TEXT_DISABLED};
-    }}
     QPushButton#tertiaryButton {{
         background: {COLOR_BG_PANEL};
     }}
@@ -280,5 +266,9 @@ def dialog_stylesheet() -> str:
 
 def qcolor(value: str) -> QColor:
     return QColor(value)
+
+
+
+
 
 
