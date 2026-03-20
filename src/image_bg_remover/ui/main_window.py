@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from image_bg_remover.config import SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_MODELS
+from image_bg_remover.masking import build_dummy_mask, build_mask_overlay
 from image_bg_remover.state import AppState, ImageViewportMapping
 from image_bg_remover.ui.image_preview import ImagePreviewWidget
 
@@ -40,18 +41,21 @@ class ResultPreviewPanel(QFrame):
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        rect = self.rect().adjusted(1, 1, -1, -1)
-        painter.fillRect(rect, QColor("#fffdf8"))
-        painter.setPen(QColor("#d9cdbb"))
-        painter.drawRoundedRect(rect, 18, 18)
+            rect = self.rect().adjusted(1, 1, -1, -1)
+            painter.fillRect(rect, QColor("#fffdf8"))
+            painter.setPen(QColor("#d9cdbb"))
+            painter.drawRoundedRect(rect, 18, 18)
 
-        body_rect = rect.adjusted(18, 18, -18, -18)
-        painter.setPen(QColor("#7b8794"))
-        text = "結果プレビューはフェーズ7で表示します" if not self._has_content else "State connected"
-        painter.drawText(body_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
-        painter.end()
+            body_rect = rect.adjusted(18, 18, -18, -18)
+            painter.setPen(QColor("#7b8794"))
+            text = "結果プレビューはフェーズ7で表示します" if not self._has_content else "State connected"
+            painter.drawText(body_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
+        finally:
+            if painter.isActive():
+                painter.end()
 
 
 class MainWindow(QMainWindow):
@@ -69,7 +73,7 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
-        self.statusBar().showMessage("Phase 3 image loading ready")
+        self.statusBar().showMessage("Phase 5 mask state ready")
 
     def _build_ui(self) -> None:
         scroll_area = QScrollArea(self)
@@ -101,6 +105,7 @@ class MainWindow(QMainWindow):
         )
         self.input_preview.setMinimumHeight(360)
         self.input_preview.mapping_changed.connect(self._handle_mapping_changed)
+        self.input_preview.interaction_requested.connect(self._handle_preview_interaction)
 
         self.image_info_label = QLabel("画像未読込", input_group)
         self.image_info_label.setObjectName("metaLabel")
@@ -194,6 +199,9 @@ class MainWindow(QMainWindow):
         self.mask_state_value = QLabel(status_group)
         self.result_state_value = QLabel(status_group)
         self.mapping_state_value = QLabel(status_group)
+        self.foreground_count_value = QLabel(status_group)
+        self.background_count_value = QLabel(status_group)
+        self.mask_data_value = QLabel(status_group)
 
         status_layout.addWidget(QLabel("画像", status_group), 0, 0)
         status_layout.addWidget(self.image_state_value, 0, 1)
@@ -203,6 +211,12 @@ class MainWindow(QMainWindow):
         status_layout.addWidget(self.result_state_value, 2, 1)
         status_layout.addWidget(QLabel("座標変換", status_group), 3, 0)
         status_layout.addWidget(self.mapping_state_value, 3, 1)
+        status_layout.addWidget(QLabel("前景点", status_group), 4, 0)
+        status_layout.addWidget(self.foreground_count_value, 4, 1)
+        status_layout.addWidget(QLabel("背景点", status_group), 5, 0)
+        status_layout.addWidget(self.background_count_value, 5, 1)
+        status_layout.addWidget(QLabel("マスク画像", status_group), 6, 0)
+        status_layout.addWidget(self.mask_data_value, 6, 1)
 
         layout.addWidget(title)
         layout.addWidget(self.load_button)
@@ -259,29 +273,37 @@ class MainWindow(QMainWindow):
 
         self.state.set_image(image_path, image)
         self.input_preview.set_image(image)
+        self.input_preview.set_mask_overlay(None)
+        self.input_preview.set_points(self.state.foreground_points, self.state.background_points)
         self._sync_ui()
         self.statusBar().showMessage(f"画像を読み込みました: {image_path.name}")
 
     def _handle_reset(self) -> None:
         self.state.full_reset()
         self.input_preview.set_image(None)
+        self.input_preview.set_mask_overlay(None)
+        self.input_preview.set_points([], [])
         self._sync_ui()
         self.statusBar().showMessage("状態をリセットしました")
 
     def _handle_create_mask(self) -> None:
-        if not self.state.image_loaded:
+        if not self.state.image_loaded or self.state.source_image is None:
             return
-        self.state.mask_created = True
-        self.state.background_removed = False
+        if not self.state.foreground_points and not self.state.background_points:
+            QMessageBox.information(self, "マスク作成", "先に前景点または背景点を追加してください。")
+            return
+
+        mask = build_dummy_mask(self.state.source_image, self.state.foreground_points, self.state.background_points)
+        overlay = build_mask_overlay(mask)
+        self.state.set_mask(mask, overlay)
+        self.input_preview.set_mask_overlay(overlay)
         self._sync_ui()
-        self.statusBar().showMessage("マスク作成状態を有効化しました")
+        self.statusBar().showMessage("ダミーマスクを作成しました")
 
     def _handle_remove_background(self) -> None:
         if not self.state.mask_created:
             return
-        self.state.background_removed = True
-        self._sync_ui()
-        self.statusBar().showMessage("背景削除状態を有効化しました")
+        self.statusBar().showMessage("背景削除処理はフェーズ7で実装します")
 
     def _handle_save_result(self) -> None:
         if not self.state.background_removed:
@@ -307,10 +329,34 @@ class MainWindow(QMainWindow):
         self.state.image_mapping = mapping
         self._sync_ui()
 
+    def _handle_preview_interaction(self, button, image_x: float, image_y: float, delete_threshold: float) -> None:
+        if not self.state.image_loaded:
+            return
+
+        if button == Qt.MouseButton.LeftButton:
+            self.state.add_point(image_x, image_y, "positive")
+            self.statusBar().showMessage(f"前景点を追加しました: ({image_x:.0f}, {image_y:.0f})")
+        elif button == Qt.MouseButton.RightButton:
+            self.state.add_point(image_x, image_y, "negative")
+            self.statusBar().showMessage(f"背景点を追加しました: ({image_x:.0f}, {image_y:.0f})")
+        elif button == Qt.MouseButton.MiddleButton:
+            removed = self.state.remove_nearest_point(image_x, image_y, delete_threshold)
+            if removed is None:
+                self.statusBar().showMessage("削除対象のポイントが見つかりません")
+            else:
+                point_kind = "前景点" if removed.kind == "positive" else "背景点"
+                self.statusBar().showMessage(f"{point_kind}を削除しました: ({removed.x:.0f}, {removed.y:.0f})")
+        else:
+            return
+
+        self.input_preview.set_mask_overlay(self.state.mask_overlay)
+        self.input_preview.set_points(self.state.foreground_points, self.state.background_points)
+        self._sync_ui()
+
     def _sync_ui(self) -> None:
         has_image = self.state.image_loaded and self.state.source_image is not None
-        has_mask = self.state.mask_created
-        has_result = self.state.background_removed
+        has_mask = self.state.mask_created and self.state.current_mask is not None
+        has_result = self.state.background_removed and self.state.background_removed_image is not None
         has_mapping = self.state.image_mapping is not None
 
         self.reset_button.setEnabled(has_image or has_mask or has_result)
@@ -322,6 +368,9 @@ class MainWindow(QMainWindow):
         self.mask_state_value.setText("作成済み" if has_mask else "未作成")
         self.result_state_value.setText("保存可能" if has_result else "未生成")
         self.mapping_state_value.setText("保持中" if has_mapping else "未計算")
+        self.foreground_count_value.setText(str(len(self.state.foreground_points)))
+        self.background_count_value.setText(str(len(self.state.background_points)))
+        self.mask_data_value.setText("あり" if self.state.current_mask is not None else "なし")
 
         self.result_preview.set_has_content(has_result)
 
@@ -330,20 +379,24 @@ class MainWindow(QMainWindow):
             info_lines = [
                 f"ファイル: {self.state.image_path.name}",
                 f"原画像サイズ: {source.width()} x {source.height()}",
+                f"前景点: {len(self.state.foreground_points)} / 背景点: {len(self.state.background_points)}",
             ]
             if self.state.image_mapping is not None:
                 mapping = self.state.image_mapping
-                info_lines.append(
-                    f"表示サイズ: {mapping.display_width:.0f} x {mapping.display_height:.0f}"
-                )
-                info_lines.append(
-                    f"表示オフセット: ({mapping.display_x:.0f}, {mapping.display_y:.0f})"
-                )
+                info_lines.append(f"表示サイズ: {mapping.display_width:.0f} x {mapping.display_height:.0f}")
+                info_lines.append(f"表示オフセット: ({mapping.display_x:.0f}, {mapping.display_y:.0f})")
+            if self.state.current_mask is not None:
+                info_lines.append(f"マスクサイズ: {self.state.current_mask.width()} x {self.state.current_mask.height()}")
             self.image_info_label.setText("\n".join(info_lines))
         else:
             self.image_info_label.setText("画像未読込")
 
-        self.result_info_label.setText("背景削除結果は未生成です" if not has_result else "保存可能な結果があります")
+        if has_mask:
+            self.result_info_label.setText("ダミーマスクを保持中です。背景削除はフェーズ7で接続します")
+        elif has_result:
+            self.result_info_label.setText("保存可能な結果があります")
+        else:
+            self.result_info_label.setText("背景削除結果は未生成です")
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(
