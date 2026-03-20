@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter
+from PySide6.QtCore import QObject, QRectF, QThread, Qt, Signal, Slot
+from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from image_bg_remover.config import SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_MODELS
 from image_bg_remover.inference import InferenceResult, SamInferenceEngine
+from image_bg_remover.masking import apply_mask_to_image
 from image_bg_remover.state import AppState, ImageViewportMapping
 from image_bg_remover.ui.image_preview import ImagePreviewWidget
 
@@ -31,12 +32,14 @@ from image_bg_remover.ui.image_preview import ImagePreviewWidget
 class ResultPreviewPanel(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._has_content = False
+        self._image: QImage | None = None
+        self._pixmap: QPixmap | None = None
         self.setMinimumHeight(180)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-    def set_has_content(self, has_content: bool) -> None:
-        self._has_content = has_content
+    def set_image(self, image: QImage | None) -> None:
+        self._image = image
+        self._pixmap = QPixmap.fromImage(image) if image is not None else None
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -49,34 +52,60 @@ class ResultPreviewPanel(QFrame):
             painter.setPen(QColor("#d9cdbb"))
             painter.drawRoundedRect(rect, 18, 18)
 
-            body_rect = rect.adjusted(18, 18, -18, -18)
-            painter.setPen(QColor("#7b8794"))
-            text = "結果プレビューはフェーズ7で表示します" if not self._has_content else "State connected"
-            painter.drawText(body_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, text)
+            body_rect = QRectF(rect.adjusted(18, 18, -18, -18))
+            self._draw_checker_background(painter, body_rect)
+
+            if self._pixmap is None:
+                painter.setPen(QColor("#7b8794"))
+                painter.drawText(body_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, "結果プレビューは未生成です")
+                return
+
+            scale = min(body_rect.width() / self._pixmap.width(), body_rect.height() / self._pixmap.height())
+            display_width = self._pixmap.width() * scale
+            display_height = self._pixmap.height() * scale
+            display_x = body_rect.x() + (body_rect.width() - display_width) / 2
+            display_y = body_rect.y() + (body_rect.height() - display_height) / 2
+            target_rect = QRectF(display_x, display_y, display_width, display_height)
+            painter.drawPixmap(target_rect, self._pixmap, QRectF(self._pixmap.rect()))
         finally:
             if painter.isActive():
                 painter.end()
+
+    def _draw_checker_background(self, painter: QPainter, rect: QRectF) -> None:
+        tile = 14
+        light = QColor("#fbf7ef")
+        dark = QColor("#ede3d2")
+        y = rect.top()
+        row = 0
+        while y < rect.bottom():
+            x = rect.left()
+            col = row
+            while x < rect.right():
+                painter.fillRect(QRectF(x, y, tile, tile), light if col % 2 == 0 else dark)
+                x += tile
+                col += 1
+            y += tile
+            row += 1
 
 
 class InferenceWorker(QObject):
     finished = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, engine: SamInferenceEngine, model_key: str, source_image: QImage, foreground_points, background_points) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._engine = engine
-        self._model_key = model_key
-        self._source_image = source_image
-        self._foreground_points = list(foreground_points)
-        self._background_points = list(background_points)
+        self._engine: SamInferenceEngine | None = None
 
-    def run(self) -> None:
+    @Slot(str, object, object, object)
+    def run_inference(self, model_key: str, source_image: QImage, foreground_points, background_points) -> None:
         try:
+            if self._engine is None:
+                self._engine = SamInferenceEngine()
             result = self._engine.predict_mask(
-                self._model_key,
-                self._source_image,
-                self._foreground_points,
-                self._background_points,
+                model_key,
+                source_image,
+                list(foreground_points),
+                list(background_points),
             )
         except Exception as exc:
             self.failed.emit(str(exc))
@@ -85,15 +114,22 @@ class InferenceWorker(QObject):
 
 
 class MainWindow(QMainWindow):
+    inference_requested = Signal(str, object, object, object)
+
     def __init__(self) -> None:
         super().__init__()
         self.state = AppState()
-        self.inference_engine = SamInferenceEngine()
-        self.inference_thread: QThread | None = None
-        self.inference_worker: InferenceWorker | None = None
         self.inference_running = False
         self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.checkpoint_path.exists()}
         self.state.selected_model_key = next(iter(self.available_model_keys), None)
+
+        self.inference_thread = QThread(self)
+        self.inference_worker = InferenceWorker()
+        self.inference_worker.moveToThread(self.inference_thread)
+        self.inference_requested.connect(self.inference_worker.run_inference)
+        self.inference_worker.finished.connect(self._handle_inference_finished)
+        self.inference_worker.failed.connect(self._handle_inference_failed)
+        self.inference_thread.start()
 
         self.setWindowTitle("Image BG Remover")
         self.resize(1400, 900)
@@ -103,7 +139,12 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
-        self.statusBar().showMessage("Phase 6 SAM2.1 inference ready")
+        self.statusBar().showMessage("Phase 7 background removal ready")
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.inference_thread.quit()
+        self.inference_thread.wait(3000)
+        super().closeEvent(event)
 
     def _build_ui(self) -> None:
         scroll_area = QScrollArea(self)
@@ -311,6 +352,7 @@ class MainWindow(QMainWindow):
         self.input_preview.set_image(image)
         self.input_preview.set_mask_overlay(None)
         self.input_preview.set_points(self.state.foreground_points, self.state.background_points)
+        self.result_preview.set_image(None)
         self._sync_ui()
         self.statusBar().showMessage(f"画像を読み込みました: {image_path.name}")
 
@@ -321,6 +363,7 @@ class MainWindow(QMainWindow):
         self.input_preview.set_image(None)
         self.input_preview.set_mask_overlay(None)
         self.input_preview.set_points([], [])
+        self.result_preview.set_image(None)
         self._sync_ui()
         self.statusBar().showMessage("状態をリセットしました")
 
@@ -338,35 +381,24 @@ class MainWindow(QMainWindow):
 
         self._set_inference_running(True)
         self.statusBar().showMessage(f"{self.model_combo.currentText()} でマスクを作成中...")
-
-        worker = InferenceWorker(
-            self.inference_engine,
+        self.inference_requested.emit(
             self.state.selected_model_key,
             self.state.source_image.copy(),
-            self.state.foreground_points,
-            self.state.background_points,
+            list(self.state.foreground_points),
+            list(self.state.background_points),
         )
-        thread = QThread(self)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(self._handle_inference_finished)
-        worker.failed.connect(self._handle_inference_failed)
-        worker.finished.connect(thread.quit)
-        worker.failed.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        worker.failed.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-
-        self.inference_worker = worker
-        self.inference_thread = thread
-        thread.start()
 
     def _handle_remove_background(self) -> None:
         if self.inference_running:
             return
-        if not self.state.mask_created:
+        if self.state.current_mask is None or self.state.source_image is None:
             return
-        self.statusBar().showMessage("背景削除処理はフェーズ7で実装します")
+
+        result_image = apply_mask_to_image(self.state.source_image, self.state.current_mask)
+        self.state.set_background_removed_image(result_image)
+        self.result_preview.set_image(result_image)
+        self._sync_ui()
+        self.statusBar().showMessage("背景を削除しました")
 
     def _handle_save_result(self) -> None:
         if self.inference_running:
@@ -418,11 +450,13 @@ class MainWindow(QMainWindow):
 
         self.input_preview.set_mask_overlay(self.state.mask_overlay)
         self.input_preview.set_points(self.state.foreground_points, self.state.background_points)
+        self.result_preview.set_image(self.state.background_removed_image)
         self._sync_ui()
 
     def _handle_inference_finished(self, result: InferenceResult) -> None:
         self.state.set_mask(result.mask, result.overlay)
         self.input_preview.set_mask_overlay(result.overlay)
+        self.result_preview.set_image(self.state.background_removed_image)
         self._set_inference_running(False)
         self._sync_ui()
         self.statusBar().showMessage(f"マスクを作成しました: model={result.model_key}, score={result.score:.3f}")
@@ -439,8 +473,6 @@ class MainWindow(QMainWindow):
             QGuiApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         else:
             QGuiApplication.restoreOverrideCursor()
-            self.inference_thread = None
-            self.inference_worker = None
         self._sync_ui()
 
     def _sync_ui(self) -> None:
@@ -467,7 +499,7 @@ class MainWindow(QMainWindow):
         self.mask_data_value.setText("あり" if self.state.current_mask is not None else "なし")
         self.busy_value.setText("はい" if self.inference_running else "いいえ")
 
-        self.result_preview.set_has_content(has_result)
+        self.result_preview.set_image(self.state.background_removed_image)
 
         if has_image and self.state.source_image is not None and self.state.image_path is not None:
             source = self.state.source_image
@@ -488,10 +520,11 @@ class MainWindow(QMainWindow):
 
         if self.inference_running:
             self.result_info_label.setText("SAM2.1 でマスク作成中です")
+        elif has_result and self.state.background_removed_image is not None:
+            result = self.state.background_removed_image
+            self.result_info_label.setText(f"背景削除結果: {result.width()} x {result.height()} の透過画像")
         elif has_mask:
-            self.result_info_label.setText("SAM2.1 マスクを保持中です。背景削除はフェーズ7で接続します")
-        elif has_result:
-            self.result_info_label.setText("保存可能な結果があります")
+            self.result_info_label.setText("SAM2.1 マスクを保持中です。[背景を削除] で透過画像を生成できます")
         else:
             self.result_info_label.setText("背景削除結果は未生成です")
 

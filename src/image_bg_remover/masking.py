@@ -46,5 +46,18 @@ def build_mask_overlay(mask: QImage) -> QImage:
     return overlay
 
 
+def apply_mask_to_image(source_image: QImage, mask: QImage) -> QImage:
+    result = source_image.convertToFormat(QImage.Format.Format_ARGB32)
+    mask_gray = mask.convertToFormat(QImage.Format.Format_Grayscale8)
+
+    for y in range(result.height()):
+        for x in range(result.width()):
+            color = result.pixelColor(x, y)
+            color.setAlpha(mask_gray.pixelColor(x, y).red())
+            result.setPixelColor(x, y, color)
+
+    return result
+
+
 def _draw_soft_circle(painter: QPainter, center: QPointF, radius: float) -> None:
     painter.drawEllipse(center, radius, radius)
