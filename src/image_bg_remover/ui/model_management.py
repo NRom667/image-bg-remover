@@ -4,12 +4,12 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -45,10 +45,13 @@ class ModelManagementDialog(QDialog):
         self._download_thread: QThread | None = None
         self._download_worker: ModelDownloadWorker | None = None
         self._active_model_key: str | None = None
-        self._row_widgets: dict[str, tuple[QPushButton, QLabel, QLabel]] = {}
+        self._active_download_detail: str | None = None
+        self._active_download_percent: int | None = None
+        self._active_download_indeterminate = False
+        self._card_widgets: dict[str, tuple[QFrame, QLabel, QLabel, QPushButton, QProgressBar]] = {}
 
         self.setWindowTitle("Model Management")
-        self.resize(720, 360)
+        self.resize(760, 460)
         self.setModal(True)
 
         layout = QVBoxLayout(self)
@@ -56,55 +59,79 @@ class ModelManagementDialog(QDialog):
         layout.setSpacing(14)
 
         description = QLabel(
-            "Download a checkpoint/config pair for any missing SAM2.1 model.",
+            "不足しているSAM2.1モデルのcheckpoint/configをダウンロードします.",
             self,
         )
         description.setWordWrap(True)
+        description.setObjectName("dialogDescriptionLabel")
 
-        grid_frame = QFrame(self)
-        grid_layout = QGridLayout(grid_frame)
-        grid_layout.setContentsMargins(12, 12, 12, 12)
-        grid_layout.setHorizontalSpacing(14)
-        grid_layout.setVerticalSpacing(10)
-        for column, title in enumerate(("Download", "Model", "Status", "Details")):
-            header_label = QLabel(title, grid_frame)
-            header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            grid_layout.addWidget(header_label, 0, column)
+        self.summary_label = QLabel(self)
+        self.summary_label.setObjectName("modelSummaryLabel")
 
-        for row, model in enumerate(self._models, start=1):
-            download_button = QPushButton("Download", grid_frame)
-            download_button.clicked.connect(lambda checked=False, key=model.key: self._start_download_for_model(key))
-            name_label = QLabel(model.label, grid_frame)
-            name_label.setMargin(8)
-            status_label = QLabel(grid_frame)
-            status_label.setMargin(8)
-            detail_label = QLabel(grid_frame)
-            detail_label.setMargin(8)
+        cards_container = QWidget(self)
+        cards_layout = QVBoxLayout(cards_container)
+        cards_layout.setContentsMargins(0, 0, 0, 0)
+        cards_layout.setSpacing(12)
+
+        for model in self._models:
+            card = QFrame(cards_container)
+            card.setObjectName("modelCard")
+
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(16, 16, 16, 16)
+            card_layout.setSpacing(10)
+
+            top_row = QHBoxLayout()
+            top_row.setSpacing(12)
+
+            text_column = QVBoxLayout()
+            text_column.setSpacing(4)
+
+            name_label = QLabel(model.label, card)
+            name_label.setObjectName("modelCardTitle")
+
+            status_label = QLabel(card)
+            status_label.setObjectName("modelCardStatus")
+
+            detail_label = QLabel(card)
+            detail_label.setObjectName("modelCardDetail")
             detail_label.setWordWrap(True)
-            self._row_widgets[model.key] = (download_button, status_label, detail_label)
-            grid_layout.addWidget(download_button, row, 0)
-            grid_layout.addWidget(name_label, row, 1)
-            grid_layout.addWidget(status_label, row, 2)
-            grid_layout.addWidget(detail_label, row, 3)
 
-        self.progress_label = QLabel("Idle", self)
-        self.progress_bar = QProgressBar(self)
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
+            text_column.addWidget(name_label)
+            text_column.addWidget(status_label)
+            text_column.addWidget(detail_label)
+            top_row.addLayout(text_column, 1)
+
+            download_button = QPushButton("ダウンロード", card)
+            download_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            download_button.clicked.connect(lambda checked=False, key=model.key: self._start_download_for_model(key))
+            top_row.addWidget(download_button, 0, Qt.AlignmentFlag.AlignTop)
+
+            progress_bar = QProgressBar(card)
+            progress_bar.setRange(0, 100)
+            progress_bar.setValue(0)
+            progress_bar.setVisible(False)
+
+            card_layout.addLayout(top_row)
+            card_layout.addWidget(progress_bar)
+
+            self._card_widgets[model.key] = (card, status_label, detail_label, download_button, progress_bar)
+            cards_layout.addWidget(card)
+
+        cards_layout.addStretch(1)
 
         button_row = QHBoxLayout()
         button_row.addStretch(1)
-        self.close_button = QPushButton("Close", self)
+        self.close_button = QPushButton("閉じる", self)
         self.close_button.clicked.connect(self.accept)
         button_row.addWidget(self.close_button)
 
         layout.addWidget(description)
-        layout.addWidget(grid_frame)
-        layout.addWidget(self.progress_label)
-        layout.addWidget(self.progress_bar)
+        layout.addWidget(self.summary_label)
+        layout.addWidget(cards_container, 1)
         layout.addLayout(button_row)
 
-        self._refresh_rows()
+        self._refresh_cards()
         self._apply_styles()
 
     def _show_message_box(self, icon: QMessageBox.Icon, title: str, text: str) -> None:
@@ -118,7 +145,7 @@ class ModelManagementDialog(QDialog):
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if self._download_thread is not None and self._download_thread.isRunning():
-            self._show_message_box(QMessageBox.Icon.Information, "Download Running", "Wait for the current download to finish.")
+            self._show_message_box(QMessageBox.Icon.Information, "ダウンロード中…", "現在のダウンロードが完了するまでお待ちください")
             event.ignore()
             return
         super().closeEvent(event)
@@ -131,18 +158,15 @@ class ModelManagementDialog(QDialog):
         if model is None:
             return
         if model.is_available():
-            self.progress_label.setText(f"{model.label}: already available")
-            self.progress_bar.setRange(0, 100)
-            self.progress_bar.setValue(100)
-            self._refresh_rows()
+            self._refresh_cards()
             return
 
         self._active_model_key = model.key
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_label.setText(f"{model.label}: starting download...")
+        self._active_download_detail = "ダウンロードを開始しています..."
+        self._active_download_percent = 0
+        self._active_download_indeterminate = False
         self.close_button.setEnabled(False)
-        self._refresh_rows()
+        self._refresh_cards()
 
         self._download_thread = QThread(self)
         self._download_worker = ModelDownloadWorker(model)
@@ -158,35 +182,34 @@ class ModelManagementDialog(QDialog):
 
     def _handle_progress(self, progress: DownloadProgress) -> None:
         if progress.total_bytes in (None, 0):
-            self.progress_bar.setRange(0, 0)
             size_text = self._format_bytes(progress.bytes_written)
+            self._active_download_percent = None
+            self._active_download_indeterminate = True
         else:
-            self.progress_bar.setRange(0, 100)
             percentage = int((progress.bytes_written / progress.total_bytes) * 100)
-            self.progress_bar.setValue(max(0, min(100, percentage)))
+            self._active_download_percent = max(0, min(100, percentage))
+            self._active_download_indeterminate = False
             size_text = f"{self._format_bytes(progress.bytes_written)} / {self._format_bytes(progress.total_bytes)}"
 
-        self.progress_label.setText(f"{progress.model_label}: downloading {progress.file_name} ({size_text})")
-        self._refresh_rows(active_file=progress.file_name)
+        self._active_download_detail = f"{progress.file_name} をダウンロード中 ({size_text})"
+        self._refresh_cards(active_file=progress.file_name)
 
-    def _handle_finished(self, model_key: str) -> None:
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(100)
-        model = next((item for item in self._models if item.key == model_key), None)
-        label = model.label if model is not None else model_key
-        self.progress_label.setText(f"{label}: download completed")
+    def _handle_finished(self, _model_key: str) -> None:
         self.close_button.setEnabled(True)
         self._active_model_key = None
-        self._refresh_rows()
+        self._active_download_detail = None
+        self._active_download_percent = None
+        self._active_download_indeterminate = False
+        self._refresh_cards()
 
     def _handle_failed(self, message: str) -> None:
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        self.progress_label.setText("Download failed.")
         self.close_button.setEnabled(True)
         self._active_model_key = None
-        self._refresh_rows()
-        self._show_message_box(QMessageBox.Icon.Critical, "Download Failed", message)
+        self._active_download_detail = None
+        self._active_download_percent = None
+        self._active_download_indeterminate = False
+        self._refresh_cards()
+        self._show_message_box(QMessageBox.Icon.Critical, "ダウンロードに失敗しました", message)
 
     def _cleanup_download_thread(self) -> None:
         if self._download_worker is not None:
@@ -196,17 +219,33 @@ class ModelManagementDialog(QDialog):
             self._download_thread.deleteLater()
             self._download_thread = None
 
-    def _refresh_rows(self, active_file: str | None = None) -> None:
+    def _refresh_cards(self, active_file: str | None = None) -> None:
         download_running = self._active_model_key is not None
+        available_count = sum(1 for model in self._models if model.is_available())
+        missing_count = len(self._models) - available_count
+
+        if missing_count == 0:
+            self.summary_label.setText(f"{available_count}個のモデルが利用可能です")
+        elif download_running:
+            self.summary_label.setText(f"{available_count} / {len(self._models)} 利用可能 | 1件ダウンロード中")
+        else:
+            self.summary_label.setText(f"{available_count} / {len(self._models)} 利用可能 | あと{missing_count}個ダウンロードできます")
+
         for model in self._models:
-            button, status_label, detail_label = self._row_widgets[model.key]
+            card, status_label, detail_label, button, progress_bar = self._card_widgets[model.key]
             checkpoint_ready = model.checkpoint_path.exists()
             config_ready = model.config_path.exists()
 
+            progress_bar.setVisible(False)
+
             if checkpoint_ready and config_ready:
-                status_label.setText("Ready")
-                detail_label.setText("checkpoint / config present")
-                button.setText("Ready")
+                card.setProperty("cardState", "ready")
+                status_label.setText("利用可能")
+                detail_label.setText("checkpoint / config は配置済みです")
+                button.setText("利用可能")
+                button.setProperty("downloadReady", False)
+                self._apply_dynamic_style(card)
+                self._apply_dynamic_style(button)
                 button.setEnabled(False)
                 continue
 
@@ -217,18 +256,34 @@ class ModelManagementDialog(QDialog):
                 missing.append(model.config_name)
 
             if self._active_model_key == model.key:
-                status_label.setText("Downloading")
-                button.setText("Downloading...")
-                button.setEnabled(False)
-                if active_file is not None and active_file in missing:
-                    detail_label.setText(f"downloading: {active_file}")
+                card.setProperty("cardState", "active")
+                status_label.setText("ダウンロード中")
+                if self._active_download_detail is not None:
+                    detail_label.setText(self._active_download_detail)
+                elif active_file is not None and active_file in missing:
+                    detail_label.setText(f"{active_file} をダウンロード中")
                 else:
-                    detail_label.setText("missing: " + ", ".join(missing))
+                    detail_label.setText("不足: " + ", ".join(missing))
+                button.setText("ダウンロード中...")
+                button.setProperty("downloadReady", False)
+                self._apply_dynamic_style(card)
+                self._apply_dynamic_style(button)
+                button.setEnabled(False)
+                progress_bar.setVisible(True)
+                if self._active_download_indeterminate:
+                    progress_bar.setRange(0, 0)
+                else:
+                    progress_bar.setRange(0, 100)
+                    progress_bar.setValue(self._active_download_percent or 0)
                 continue
 
-            status_label.setText("Missing")
-            detail_label.setText("missing: " + ", ".join(missing))
-            button.setText("Download")
+            card.setProperty("cardState", "missing")
+            status_label.setText(f"{len(missing)}ファイル不足")
+            detail_label.setText("不足: " + ", ".join(missing))
+            button.setText("ダウンロード")
+            button.setProperty("downloadReady", not download_running)
+            self._apply_dynamic_style(card)
+            self._apply_dynamic_style(button)
             button.setEnabled(not download_running)
 
     def _format_bytes(self, size: int) -> str:
@@ -242,8 +297,11 @@ class ModelManagementDialog(QDialog):
             return f"{int(value)} {units[unit_index]}"
         return f"{value:.1f} {units[unit_index]}"
 
+    def _apply_dynamic_style(self, widget: QWidget) -> None:
+        style = widget.style()
+        style.unpolish(widget)
+        style.polish(widget)
+        widget.update()
+
     def _apply_styles(self) -> None:
         self.setStyleSheet(dialog_stylesheet())
-
-
-

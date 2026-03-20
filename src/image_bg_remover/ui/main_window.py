@@ -351,7 +351,7 @@ class MainWindow(QMainWindow):
 
         input_layout.addWidget(self.input_preview)
 
-        result_group = QGroupBox("Background Removed Preview", scroll_content)
+        result_group = QGroupBox("Result Preview", scroll_content)
         result_layout = QVBoxLayout(result_group)
         result_layout.setContentsMargins(14, 20, 14, 14)
         result_layout.setSpacing(10)

@@ -240,14 +240,53 @@ def dialog_stylesheet() -> str:
     QDialog {{
         background: {COLOR_BG_APP};
     }}
-    QFrame {{
+    QFrame#modelCard {{
         background: {COLOR_BG_CARD};
         border: 1px solid {COLOR_BORDER_DEFAULT};
         border-radius: {RADIUS_MD}px;
     }}
+    QFrame#modelCard[cardState="missing"] {{
+        border: 1px solid {COLOR_BORDER_STRONG};
+        background: {COLOR_BG_PANEL};
+    }}
+    QFrame#modelCard[cardState="active"] {{
+        border: 2px solid {COLOR_BORDER_FOCUS};
+        background: {COLOR_BG_HOVER};
+    }}
+    QFrame#modelCard[cardState="ready"] {{
+        border: 1px solid {COLOR_BORDER_DEFAULT};
+        background: {COLOR_BG_CARD};
+    }}
     QLabel {{
         color: {COLOR_TEXT_SECONDARY};
-        font-family: \"{FONT_FAMILY}\";
+        font-family: "{FONT_FAMILY}";
+        font-size: 13px;
+    }}
+    QLabel#dialogDescriptionLabel {{
+        color: {COLOR_TEXT_SECONDARY};
+        font-size: 14px;
+    }}
+    QLabel#modelSummaryLabel {{
+        color: {COLOR_TEXT_PRIMARY};
+        background: {COLOR_BG_SUBTLE};
+        border: 1px solid {COLOR_BORDER_DEFAULT};
+        border-radius: {RADIUS_SM}px;
+        padding: {SPACE_12}px {SPACE_16}px;
+        font-size: 14px;
+        font-weight: 600;
+    }}
+    QLabel#modelCardTitle {{
+        color: {COLOR_TEXT_PRIMARY};
+        font-size: 16px;
+        font-weight: 700;
+    }}
+    QLabel#modelCardStatus {{
+        color: {COLOR_TEXT_PRIMARY};
+        font-size: 13px;
+        font-weight: 600;
+    }}
+    QLabel#modelCardDetail {{
+        color: {COLOR_TEXT_SECONDARY};
         font-size: 13px;
     }}
     QPushButton {{
@@ -257,9 +296,24 @@ def dialog_stylesheet() -> str:
         padding: {SPACE_8}px {SPACE_12}px;
         background: {COLOR_BG_BUTTON};
         color: {COLOR_TEXT_PRIMARY};
-        font-family: \"{FONT_FAMILY}\";
+        font-family: "{FONT_FAMILY}";
         font-size: 14px;
         font-weight: 600;
+    }}
+    QPushButton[downloadReady="true"] {{
+        background: {COLOR_ACCENT_PRIMARY};
+        border: 1px solid {COLOR_ACCENT_PRIMARY_HOVER};
+        color: {COLOR_TEXT_ON_ACCENT};
+    }}
+    QPushButton[downloadReady="true"]:hover {{
+        background: {COLOR_ACCENT_PRIMARY_HOVER};
+        border: 1px solid {COLOR_ACCENT_PRIMARY_HOVER};
+        color: {COLOR_TEXT_ON_ACCENT};
+    }}
+    QPushButton[downloadReady="true"]:pressed {{
+        background: {COLOR_ACCENT_PRIMARY_HOVER};
+        border: 1px solid {COLOR_ACCENT_PRIMARY_HOVER};
+        color: {COLOR_TEXT_ON_ACCENT};
     }}
     QPushButton:hover {{
         border: 1px solid {COLOR_BORDER_STRONG};
@@ -277,21 +331,24 @@ def dialog_stylesheet() -> str:
         border: 1px solid {COLOR_BORDER_DISABLED};
     }}
     QProgressBar {{
-        min-height: 24px;
+        min-height: 12px;
         border: 1px solid {COLOR_BORDER_DEFAULT};
-        border-radius: 10px;
+        border-radius: 8px;
         background: {COLOR_BG_CARD};
         text-align: center;
         color: {COLOR_TEXT_PRIMARY};
     }}
     QProgressBar::chunk {{
-        border-radius: 9px;
+        border-radius: 7px;
         background: {COLOR_ACCENT_PRIMARY};
     }}
     """
 
 
+
 def qcolor(value: str) -> QColor:
     return QColor(value)
+
+
 
 
