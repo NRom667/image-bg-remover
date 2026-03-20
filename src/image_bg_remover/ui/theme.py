@@ -18,17 +18,19 @@ RADIUS_MD = 16
 RADIUS_LG = 20
 
 CONTROL_HEIGHT = 42
-SIDEBAR_WIDTH = 296
+SIDEBAR_WIDTH = 272
 
 COLOR_BG_APP = "#f4efe6"
 COLOR_BG_PANEL = "#fffbf5"
 COLOR_BG_CARD = "#fffdfa"
+COLOR_BG_BUTTON = "#fbf3e7"
+COLOR_BG_BUTTON_PRESSED = "#f1e2cf"
 COLOR_BG_SUBTLE = "#f7f1e7"
 COLOR_BG_HOVER = "#fff4e3"
 COLOR_BG_DISABLED = "#f1ebe2"
 
-COLOR_BORDER_DEFAULT = "#e4d8c7"
-COLOR_BORDER_STRONG = "#d3c1aa"
+COLOR_BORDER_DEFAULT = "#d9c4a8"
+COLOR_BORDER_STRONG = "#b99567"
 COLOR_BORDER_FOCUS = "#b88952"
 COLOR_BORDER_DISABLED = "#ded5c8"
 
@@ -78,15 +80,21 @@ def message_box_stylesheet() -> str:
         border-radius: {RADIUS_SM}px;
         border: 1px solid {COLOR_BORDER_DEFAULT};
         padding: {SPACE_8}px {SPACE_16}px;
-        background: {COLOR_BG_CARD};
+        background: {COLOR_BG_BUTTON};
         color: {COLOR_TEXT_PRIMARY};
         font-family: \"{FONT_FAMILY}\";
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 600;
     }}
     QMessageBox QPushButton:hover {{
         border: 1px solid {COLOR_BORDER_STRONG};
         background: {COLOR_BG_HOVER};
+    }}
+    QMessageBox QPushButton:pressed {{
+        background: {COLOR_BG_BUTTON_PRESSED};
+        border: 1px solid {COLOR_BORDER_STRONG};
+        padding-top: 9px;
+        padding-bottom: 7px;
     }}
     """
 
@@ -152,10 +160,10 @@ def main_window_stylesheet() -> str:
         border-radius: {RADIUS_SM}px;
         border: 1px solid {COLOR_BORDER_DEFAULT};
         padding: {SPACE_8}px {SPACE_12}px;
-        background: {COLOR_BG_CARD};
+        background: {COLOR_BG_BUTTON};
         color: {COLOR_TEXT_PRIMARY};
         font-family: \"{FONT_FAMILY}\";
-        font-size: 15px;
+        font-size: 16px;
     }}
     QPushButton {{
         font-weight: 500;
@@ -163,6 +171,12 @@ def main_window_stylesheet() -> str:
     QPushButton:hover, QComboBox:hover {{
         border: 1px solid {COLOR_BORDER_STRONG};
         background: {COLOR_BG_HOVER};
+    }}
+    QPushButton:pressed {{
+        background: {COLOR_BG_BUTTON_PRESSED};
+        border: 1px solid {COLOR_BORDER_STRONG};
+        padding-top: 9px;
+        padding-bottom: 7px;
     }}
     QPushButton:focus, QComboBox:focus {{
         border: 2px solid {COLOR_BORDER_FOCUS};
@@ -234,7 +248,7 @@ def dialog_stylesheet() -> str:
         border-radius: {RADIUS_SM}px;
         border: 1px solid {COLOR_BORDER_DEFAULT};
         padding: {SPACE_8}px {SPACE_12}px;
-        background: {COLOR_BG_CARD};
+        background: {COLOR_BG_BUTTON};
         color: {COLOR_TEXT_PRIMARY};
         font-family: \"{FONT_FAMILY}\";
         font-size: 14px;
@@ -243,6 +257,12 @@ def dialog_stylesheet() -> str:
     QPushButton:hover {{
         border: 1px solid {COLOR_BORDER_STRONG};
         background: {COLOR_BG_HOVER};
+    }}
+    QPushButton:pressed {{
+        background: {COLOR_BG_BUTTON_PRESSED};
+        border: 1px solid {COLOR_BORDER_STRONG};
+        padding-top: 9px;
+        padding-bottom: 7px;
     }}
     QPushButton:disabled {{
         color: {COLOR_TEXT_DISABLED};
@@ -266,9 +286,3 @@ def dialog_stylesheet() -> str:
 
 def qcolor(value: str) -> QColor:
     return QColor(value)
-
-
-
-
-
-

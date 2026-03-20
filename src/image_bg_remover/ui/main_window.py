@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -114,6 +114,9 @@ class ResultPreviewPanel(QFrame):
 
 
 class ModelComboBox(QComboBox):
+    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802
+        event.ignore()
+
     def paintEvent(self, event) -> None:  # noqa: N802
         super().paintEvent(event)
 
@@ -232,7 +235,7 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
-        self.statusBar().showMessage("Phase 10 error handling ready")
+        self.statusBar().showMessage("ready")
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -696,6 +699,10 @@ class MainWindow(QMainWindow):
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(main_window_stylesheet())
+
+
+
+
 
 
 
