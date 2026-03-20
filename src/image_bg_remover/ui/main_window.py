@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRectF, QThread, Qt, Signal, Slot
+from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -124,6 +124,7 @@ class MainWindow(QMainWindow):
         self.inference_running = False
         self.available_model_keys: set[str] = set()
         self._refresh_available_models(update_selection=True)
+        self._startup_model_dialog_pending = not self.available_model_keys
 
         self.inference_thread = QThread(self)
         self.inference_worker = InferenceWorker()
@@ -141,12 +142,36 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
-        self.statusBar().showMessage("Phase 9 model download ready")
+        self.statusBar().showMessage("Phase 10 error handling ready")
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if self._startup_model_dialog_pending:
+            self._startup_model_dialog_pending = False
+            QTimer.singleShot(0, self._open_model_management_for_missing_models)
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self.inference_thread.quit()
         self.inference_thread.wait(3000)
         super().closeEvent(event)
+
+    def _open_model_management_for_missing_models(self) -> None:
+        if self.inference_running:
+            return
+        dialog = ModelManagementDialog(SUPPORTED_MODELS, self)
+        dialog.exec()
+        self._refresh_available_models(update_selection=True)
+        self._populate_models()
+        self._sync_ui()
+        if self.available_model_keys:
+            self.statusBar().showMessage("モデルを利用可能にしました")
+        else:
+            QMessageBox.information(
+                self,
+                "モデル未配置",
+                "利用可能なモデルが見つかりません。モデル管理から少なくとも1つダウンロードしてください。",
+            )
+            self.statusBar().showMessage("モデルが未配置です")
 
     def _refresh_available_models(self, update_selection: bool = False) -> None:
         self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.is_available()}
@@ -267,9 +292,13 @@ class MainWindow(QMainWindow):
         self.model_combo.currentIndexChanged.connect(self._handle_model_changed)
         self.manage_models_button = QPushButton("モデル管理", model_group)
         self.manage_models_button.clicked.connect(self._handle_manage_models)
+        self.model_status_label = QLabel(model_group)
+        self.model_status_label.setObjectName("metaLabel")
+        self.model_status_label.setWordWrap(True)
 
         model_layout.addWidget(self.model_combo)
         model_layout.addWidget(self.manage_models_button)
+        model_layout.addWidget(self.model_status_label)
 
         status_group = QGroupBox("State", sidebar)
         status_layout = QGridLayout(status_group)
@@ -329,8 +358,13 @@ class MainWindow(QMainWindow):
             index = self.model_combo.findData(self.state.selected_model_key)
             if index >= 0:
                 self.model_combo.setCurrentIndex(index)
-        elif self.model_combo.count() > 0:
-            self.model_combo.setCurrentIndex(0)
+        elif self.available_model_keys:
+            first_available = next(iter(self.available_model_keys))
+            index = self.model_combo.findData(first_available)
+            if index >= 0:
+                self.model_combo.setCurrentIndex(index)
+        else:
+            self.model_combo.setCurrentIndex(-1)
 
         self.model_combo.blockSignals(False)
 
@@ -381,6 +415,7 @@ class MainWindow(QMainWindow):
         if self.inference_running:
             return
         if not self.state.image_loaded or self.state.source_image is None:
+            QMessageBox.information(self, "画像未読込", "先に画像を読み込んでください。")
             return
         if self.state.selected_model_key is None:
             QMessageBox.warning(self, "モデル未選択", "利用可能なモデルを選択してください。")
@@ -402,6 +437,7 @@ class MainWindow(QMainWindow):
         if self.inference_running:
             return
         if self.state.current_mask is None or self.state.source_image is None:
+            QMessageBox.information(self, "マスク未作成", "先に[マスク作成]を実行してください。")
             return
 
         result_image = apply_mask_to_image(self.state.source_image, self.state.current_mask)
@@ -414,6 +450,7 @@ class MainWindow(QMainWindow):
         if self.inference_running:
             return
         if self.state.background_removed_image is None:
+            QMessageBox.information(self, "保存対象なし", "先に[背景を削除]を実行してください。")
             return
 
         default_path = self._build_default_save_path()
@@ -451,21 +488,17 @@ class MainWindow(QMainWindow):
     def _handle_manage_models(self) -> None:
         if self.inference_running:
             return
-        dialog = ModelManagementDialog(SUPPORTED_MODELS, self)
-        dialog.exec()
-        self._refresh_available_models(update_selection=True)
-        self._populate_models()
-        self._sync_ui()
-        if self.available_model_keys:
-            self.statusBar().showMessage("Model list refreshed")
-        else:
-            self.statusBar().showMessage("No models available")
+        self._open_model_management_for_missing_models()
 
     def _handle_model_changed(self, index: int) -> None:
         if index < 0:
             self.state.selected_model_key = None
             return
-        self.state.selected_model_key = self.model_combo.itemData(index)
+        selected_key = self.model_combo.itemData(index)
+        if selected_key not in self.available_model_keys:
+            self.state.selected_model_key = None
+            return
+        self.state.selected_model_key = selected_key
         self.statusBar().showMessage(f"モデル選択: {self.model_combo.currentText()}")
 
     def _handle_mapping_changed(self, mapping: ImageViewportMapping | None) -> None:

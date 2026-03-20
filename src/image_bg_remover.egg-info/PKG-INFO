@@ -1,0 +1,42 @@
+Metadata-Version: 2.4
+Name: image-bg-remover
+Version: 0.1.0
+Summary: Windows desktop app for background removal with SAM2.1.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: PySide6<7,>=6.7
+Requires-Dist: numpy<3,>=1.26
+Requires-Dist: hydra-core<2,>=1.3
+Requires-Dist: iopath<1,>=0.1.10
+Requires-Dist: torch<3,>=2.5
+Requires-Dist: torchvision<1,>=0.20
+Requires-Dist: sam2 @ git+https://github.com/facebookresearch/sam2.git
+Provides-Extra: build
+Requires-Dist: PyInstaller<7,>=6.11; extra == "build"
+
+﻿# Image BG Remover
+
+## Overview
+- Desktop app for background removal with SAM2.1
+- Windows 11 target
+- CPU inference supported
+
+## Build
+1. Create and activate a Python 3.11+ environment.
+2. Install runtime dependencies.
+3. Install build tools with `pip install -e .[build]`.
+4. Run `powershell -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1 -Clean`.
+5. Output is generated under `dist\ImageBGRemover\`.
+
+## Distribution Layout
+PyInstaller one-folder build creates this layout:
+- `dist\ImageBGRemover\ImageBGRemover.exe`
+- `dist\ImageBGRemover\_internal\models\sam2\...`
+
+The packaged app first looks for `models\sam2` next to the executable.
+If that does not exist, it falls back to the bundled `_internal\models\sam2` directory.
+
+## Notes
+- If no model is found at startup, the model management dialog opens automatically.
+- You can redistribute with bundled models as-is.
+- You can also place downloadable models next to the executable under `models\sam2`.

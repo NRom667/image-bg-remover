@@ -1,0 +1,2 @@
+[console_scripts]
+image-bg-remover = image_bg_remover.__main__:main
