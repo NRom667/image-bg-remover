@@ -20,26 +20,26 @@ HELP_SECTIONS = (
     (
         "基本の流れ",
         (
-            "1. [画像読込] で jpg / jpeg / png 画像を開きます。",
+            "1. 【画像読込】 で jpg / jpeg / png 画像を開きます。",
             "2. プレビュー上で残したい領域を左クリック、消したい場所を右クリックで点を追加します。",
-            "3. [背景を削除] を押します。",
-            "4. 結果を確認して [結果を保存] から透過 PNG を保存します。",
+            "3. 【背景を削除】 を押します。",
+            "4. 結果を確認して 【結果を保存】 から透過 PNG を保存します。",
         ),
     ),
     (
         "ポイントの追加/削除の詳細",
         (
-            "左クリック: 前景点を追加",
-            "右クリック: 背景点を追加",
-            "中クリック: 点を削除",
-            "まずは少ない点で試し、境界が不十分な場所だけ追加すると調整しやすくなります。",
+            "・左クリック: 前景点を追加",
+            "・右クリック: 背景点を追加",
+            "・中クリック: 点を削除",
+            "・まずは少ない点で試し、境界が不十分な場所だけ追加すると調整しやすくなります。",
         ),
     ),
     (
         "補足",
         (
-            "使用するモデルがない場合は [モデル管理] からダウンロードしてください。",
-            "保存形式は透過 PNG です。",
+            "・使用するモデルがない場合は [モデル管理] からダウンロードしてください。",
+            "・保存形式は透過 PNG です。",
         ),
     ),
 )
@@ -49,7 +49,7 @@ class HelpDialog(QDialog):
     def __init__(self, auto_show_enabled: bool, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("使い方")
-        self.resize(720, 620)
+        self.resize(780, 620)
         self.setModal(True)
 
         layout = QVBoxLayout(self)
@@ -68,30 +68,50 @@ class HelpDialog(QDialog):
 
         scroll_content = QWidget(scroll_area)
         scroll_content.setObjectName("helpScrollContent")
-        content_layout = QVBoxLayout(scroll_content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(12)
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(0)
 
-        for heading, paragraphs in HELP_SECTIONS:
-            section_frame = QFrame(scroll_content)
+        content_panel = QFrame(scroll_content)
+        content_panel.setObjectName("helpContentPanel")
+        content_layout = QVBoxLayout(content_panel)
+        content_layout.setContentsMargins(22, 22, 22, 22)
+        content_layout.setSpacing(18)
+
+        for index, (heading, paragraphs) in enumerate(HELP_SECTIONS):
+            section_frame = QFrame(content_panel)
             section_frame.setObjectName("helpSectionCard")
             section_layout = QVBoxLayout(section_frame)
-            section_layout.setContentsMargins(16, 16, 16, 16)
+            section_layout.setContentsMargins(0, 0, 0, 0)
             section_layout.setSpacing(8)
 
             heading_label = QLabel(heading, section_frame)
             heading_label.setObjectName("helpSectionTitle")
+            heading_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            heading_label.setIndent(0)
+            heading_label.setContentsMargins(0, 0, 0, 0)
 
             body_label = QLabel("\n".join(paragraphs), section_frame)
             body_label.setObjectName("helpSectionBody")
             body_label.setWordWrap(True)
+            body_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            body_label.setIndent(0)
+            body_label.setContentsMargins(0, 0, 0, 0)
             body_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
             section_layout.addWidget(heading_label)
             section_layout.addWidget(body_label)
             content_layout.addWidget(section_frame)
 
-        content_layout.addStretch(1)
+            if index < len(HELP_SECTIONS) - 1:
+                divider = QFrame(content_panel)
+                divider.setObjectName("helpSectionDivider")
+                divider.setFrameShape(QFrame.Shape.HLine)
+                divider.setFixedHeight(1)
+                content_layout.addWidget(divider)
+
+        scroll_layout.addWidget(content_panel)
+        scroll_layout.addStretch(1)
         scroll_area.setWidget(scroll_content)
 
         footer_layout = QHBoxLayout()

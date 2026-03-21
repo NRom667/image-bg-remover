@@ -300,17 +300,24 @@ def dialog_stylesheet() -> str:
         background: {COLOR_BG_APP};
     }}
     QScrollArea#helpScrollArea {{
-        border: 1px solid {COLOR_BORDER_DEFAULT};
-        border-radius: {RADIUS_MD}px;
-        background: {COLOR_BG_PANEL};
+        border: none;
+        background: transparent;
     }}
     QWidget#helpScrollContent {{
+        background: transparent;
+    }}
+    QFrame#helpContentPanel {{
         background: {COLOR_BG_PANEL};
+        border: 1px solid {COLOR_BORDER_DEFAULT};
+        border-radius: {RADIUS_LG}px;
     }}
     QFrame#helpSectionCard {{
-        background: {COLOR_BG_CARD};
-        border: 1px solid {COLOR_BORDER_DEFAULT};
-        border-radius: {RADIUS_MD}px;
+        background: transparent;
+        border: none;
+    }}
+    QFrame#helpSectionDivider {{
+        background: {COLOR_BORDER_DISABLED};
+        border: none;
     }}
     QFrame#modelCard {{
         background: {COLOR_BG_CARD};
@@ -340,17 +347,23 @@ def dialog_stylesheet() -> str:
     }}
     QLabel#helpDialogTitle {{
         color: {COLOR_TEXT_PRIMARY};
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 700;
     }}
     QLabel#helpSectionTitle {{
         color: {COLOR_TEXT_PRIMARY};
-        font-size: 16px;
+        font-size: 22px;
         font-weight: 700;
+        margin: 0 0 4px 0;
+        padding: 0;
     }}
     QLabel#helpSectionBody {{
         color: {COLOR_TEXT_SECONDARY};
-        font-size: 14px;
+        font-size: 18px;
+        font-weight: 500;
+        line-height: 2.0;
+        margin: 0 0 0 10px;
+        padding: 0;
     }}
     QLabel#modelSummaryLabel {{
         color: {COLOR_TEXT_PRIMARY};
