@@ -562,13 +562,12 @@ class MainWindow(QMainWindow):
     def _handle_reset(self) -> None:
         if self.inference_running:
             return
-        self.state.full_reset()
-        self.input_preview.set_image(None)
+        self.state.clear_points()
         self.input_preview.set_mask_overlay(None)
         self.input_preview.set_points([], [])
         self.result_preview.set_image(None)
         self._sync_ui()
-        self.statusBar().showMessage("状態をリセットしました")
+        self.statusBar().showMessage("????????????????")
 
     def _handle_create_mask(self) -> None:
         if self.inference_running:
@@ -720,9 +719,10 @@ class MainWindow(QMainWindow):
         has_mapping = self.state.image_mapping is not None
         idle = not self.inference_running
         has_available_model = self.state.selected_model_key in self.available_model_keys if self.state.selected_model_key is not None else False
+        has_points = bool(self.state.foreground_points or self.state.background_points)
 
         self.load_button.setEnabled(idle)
-        self.reset_button.setEnabled(idle and (has_image or has_mask or has_result))
+        self.reset_button.setEnabled(idle and (has_points or has_mask or has_result))
         self.create_mask_button.setEnabled(idle and has_image and has_available_model)
         self.remove_background_button.setEnabled(idle and has_mask)
         self.save_result_button.setEnabled(idle and has_result)

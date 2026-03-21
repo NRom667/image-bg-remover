@@ -116,14 +116,17 @@ class AppState:
         self.background_removed_image = image
         self.background_removed = True
 
+    def clear_points(self) -> None:
+        self.foreground_points.clear()
+        self.background_points.clear()
+        self.reset_processing()
+
     def clear_image(self) -> None:
         self.image_loaded = False
         self.image_path = None
         self.source_image = None
         self.image_mapping = None
-        self.foreground_points.clear()
-        self.background_points.clear()
-        self.reset_processing()
+        self.clear_points()
 
     def full_reset(self) -> None:
         self.clear_image()
