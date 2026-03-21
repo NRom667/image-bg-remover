@@ -403,6 +403,7 @@ def dialog_stylesheet() -> str:
         background: {COLOR_ACCENT_PRIMARY};
         border: 1px solid {COLOR_ACCENT_PRIMARY_HOVER};
         color: {COLOR_TEXT_ON_ACCENT};
+        font-size: 18px;
     }}
     QPushButton[downloadReady="true"]:hover {{
         background: {COLOR_ACCENT_PRIMARY_HOVER};

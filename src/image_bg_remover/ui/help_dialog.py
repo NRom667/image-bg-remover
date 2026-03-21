@@ -18,6 +18,12 @@ from image_bg_remover.ui.theme import dialog_stylesheet
 
 HELP_SECTIONS = (
     (
+        "モデルダウンロード",
+        (
+            "初回はモデルダウンロード画面が開くので、いずれかのモデルをダウンロードしてください。",
+        ),
+    ),
+    (
         "基本の流れ",
         (
             "1. 【画像読込】 で jpg / jpeg / png 画像を開きます。",
