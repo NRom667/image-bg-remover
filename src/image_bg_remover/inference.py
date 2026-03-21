@@ -32,6 +32,7 @@ class SamInferenceEngine:
         foreground_points: list[PromptPoint],
         background_points: list[PromptPoint],
         soften_edges: bool = True,
+        feather_radius: float = 2.0,
     ) -> InferenceResult:
         predictor = self._get_predictor(model_key)
         image_array = self._qimage_to_numpy_rgb(source_image)
@@ -51,7 +52,7 @@ class SamInferenceEngine:
         best_mask = masks[best_index]
         mask_image = self._mask_array_to_qimage(best_mask)
         if soften_edges:
-            mask_image = feather_mask(mask_image, radius=2.0)
+            mask_image = feather_mask(mask_image, radius=feather_radius)
         overlay = build_mask_overlay(mask_image)
         return InferenceResult(mask=mask_image, overlay=overlay, score=float(scores[best_index]), model_key=model_key)
 

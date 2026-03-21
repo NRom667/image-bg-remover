@@ -162,7 +162,7 @@ def main_window_stylesheet() -> str:
         left: {SPACE_12}px;
         padding: 0 {SPACE_4}px;
     }}
-    QPushButton, QComboBox {{
+    QPushButton, QComboBox, QDoubleSpinBox {{
         min-height: {CONTROL_HEIGHT}px;
         border-radius: {RADIUS_SM}px;
         border: 1px solid {COLOR_BORDER_DEFAULT};
@@ -175,7 +175,7 @@ def main_window_stylesheet() -> str:
     QPushButton {{
         font-weight: 500;
     }}
-    QPushButton:hover, QComboBox:hover {{
+    QPushButton:hover, QComboBox:hover, QDoubleSpinBox:hover {{
         border: 1px solid {COLOR_BORDER_STRONG};
         background: {COLOR_BG_HOVER};
     }}
@@ -185,10 +185,10 @@ def main_window_stylesheet() -> str:
         padding-top: 9px;
         padding-bottom: 7px;
     }}
-    QPushButton:focus, QComboBox:focus {{
+    QPushButton:focus, QComboBox:focus, QDoubleSpinBox:focus {{
         border: 2px solid {COLOR_BORDER_FOCUS};
     }}
-    QPushButton:disabled, QComboBox:disabled {{
+    QPushButton:disabled, QComboBox:disabled, QDoubleSpinBox:disabled {{
         color: {COLOR_TEXT_DISABLED};
         background: {COLOR_BG_DISABLED};
         border: 1px solid {COLOR_BORDER_DISABLED};
@@ -228,6 +228,22 @@ def main_window_stylesheet() -> str:
     }}
     QComboBox {{
         padding-right: 36px;
+    }}
+    QDoubleSpinBox {{
+        min-width: 60px;
+        min-height: 20px;
+        border-radius: 9px;
+        padding: 0px 8px 4px 8px;
+        font-size: 13px;
+    }}
+    QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+        width: 16px;
+        border: none;
+        background: transparent;
+    }}
+    QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {{
+        width: 0px;
+        height: 0px;
     }}
     QComboBox QAbstractItemView {{
         background: {COLOR_BG_CARD};
