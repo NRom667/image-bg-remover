@@ -24,6 +24,7 @@ class InferenceResult:
 class SamInferenceEngine:
     def __init__(self) -> None:
         self._predictors: dict[str, SAM2ImagePredictor] = {}
+        self._prepared_image_keys: dict[str, int] = {}
 
     def predict_mask(
         self,
@@ -35,8 +36,7 @@ class SamInferenceEngine:
         feather_radius: float = 2.0,
     ) -> InferenceResult:
         predictor = self._get_predictor(model_key)
-        image_array = self._qimage_to_numpy_rgb(source_image)
-        predictor.set_image(image_array)
+        self._prepare_image(model_key, predictor, source_image)
 
         point_coords, point_labels = self._build_prompt_arrays(foreground_points, background_points)
         multimask_output = len(point_coords) == 1
@@ -73,6 +73,15 @@ class SamInferenceEngine:
         predictor = SAM2ImagePredictor(model)
         self._predictors[model_key] = predictor
         return predictor
+
+    def _prepare_image(self, model_key: str, predictor: SAM2ImagePredictor, source_image: QImage) -> None:
+        image_key = int(source_image.cacheKey())
+        if self._prepared_image_keys.get(model_key) == image_key:
+            return
+
+        image_array = self._qimage_to_numpy_rgb(source_image)
+        predictor.set_image(image_array)
+        self._prepared_image_keys[model_key] = image_key
 
     def _build_prompt_arrays(self, foreground_points: list[PromptPoint], background_points: list[PromptPoint]) -> tuple[np.ndarray, np.ndarray]:
         prompt_points = [*foreground_points, *background_points]

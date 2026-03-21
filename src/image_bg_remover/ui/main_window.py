@@ -611,7 +611,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{self.model_combo.currentText()} でマスクを作成中...")
         self.inference_requested.emit(
             self.state.selected_model_key,
-            self.state.source_image.copy(),
+            self.state.source_image,
             list(self.state.foreground_points),
             list(self.state.background_points),
             self.soften_edges_checkbox.isChecked(),

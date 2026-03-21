@@ -36,29 +36,27 @@ def build_dummy_mask(source_image: QImage, foreground_points: list[PromptPoint],
 
 
 def build_mask_overlay(mask: QImage) -> QImage:
-    overlay = QImage(mask.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    mask_gray = mask.convertToFormat(QImage.Format.Format_Grayscale8)
+    overlay = QImage(mask_gray.size(), QImage.Format.Format_ARGB32_Premultiplied)
     overlay.fill(Qt.GlobalColor.transparent)
 
-    for y in range(mask.height()):
-        for x in range(mask.width()):
-            alpha = mask.pixelColor(x, y).red()
-            if alpha == 0:
-                continue
-            overlay.setPixelColor(x, y, QColor(220, 69, 69, min(150, alpha)))
+    mask_array = _qimage_to_numpy_gray(mask_gray)
+    overlay_array = _qimage_to_numpy_argb32(overlay)
+    alpha = np.minimum(mask_array, 150).astype(np.uint8)
+    premultiplied_scale = alpha.astype(np.uint16)
 
+    overlay_array[..., 0] = (69 * premultiplied_scale // 255).astype(np.uint8)
+    overlay_array[..., 1] = (69 * premultiplied_scale // 255).astype(np.uint8)
+    overlay_array[..., 2] = (220 * premultiplied_scale // 255).astype(np.uint8)
+    overlay_array[..., 3] = alpha
     return overlay
 
 
 def apply_mask_to_image(source_image: QImage, mask: QImage) -> QImage:
     result = source_image.convertToFormat(QImage.Format.Format_ARGB32)
     mask_gray = mask.convertToFormat(QImage.Format.Format_Grayscale8)
-
-    for y in range(result.height()):
-        for x in range(result.width()):
-            color = result.pixelColor(x, y)
-            color.setAlpha(mask_gray.pixelColor(x, y).red())
-            result.setPixelColor(x, y, color)
-
+    result_array = _qimage_to_numpy_argb32(result)
+    result_array[..., 3] = _qimage_to_numpy_gray(mask_gray)
     return result
 
 
@@ -108,3 +106,12 @@ def _numpy_gray_to_qimage(array: np.ndarray) -> QImage:
     contiguous = np.ascontiguousarray(array)
     height, width = contiguous.shape
     return QImage(contiguous.data, width, height, width, QImage.Format.Format_Grayscale8).copy()
+
+
+def _qimage_to_numpy_argb32(image: QImage) -> np.ndarray:
+    width = image.width()
+    height = image.height()
+    bytes_per_line = image.bytesPerLine()
+    ptr = image.bits()
+    array = np.frombuffer(ptr, dtype=np.uint8, count=bytes_per_line * height)
+    return array.reshape((height, bytes_per_line // 4, 4))[:, :width, :]
