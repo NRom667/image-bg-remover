@@ -23,7 +23,7 @@ def run() -> int:
     logging.getLogger(__name__).info("Application starting")
 
     window = MainWindow()
-    window.show()
+    window.showMaximized()
 
     return app.exec()
 
