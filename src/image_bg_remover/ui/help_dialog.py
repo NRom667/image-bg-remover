@@ -21,27 +21,18 @@ HELP_SECTIONS = (
         "基本の流れ",
         (
             "1. [画像読込] で jpg / jpeg / png 画像を開きます。",
-            "2. プレビュー上で左クリックすると残したい場所に前景点を追加できます。",
-            "3. 右クリックすると消したい場所に背景点を追加できます。",
-            "4. [背景を削除] を押してマスクを作成します。",
-            "5. 結果を確認して [結果を保存] から透過 PNG を保存します。",
+            "2. プレビュー上で残したい領域を左クリック、消したい場所を右クリックで点を追加します。",
+            "3. [背景を削除] を押します。",
+            "4. 結果を確認して [結果を保存] から透過 PNG を保存します。",
         ),
     ),
     (
-        "プレビュー操作",
+        "ポイントの追加/削除の詳細",
         (
             "左クリック: 前景点を追加",
             "右クリック: 背景点を追加",
-            "中クリック: 近くの点を削除",
-            "点は少数から始め、境界が不十分な場所だけ追加すると調整しやすくなります。",
-        ),
-    ),
-    (
-        "きれいに抜くコツ",
-        (
-            "輪郭が欠けるときは残したい側に前景点を追加します。",
-            "背景が残るときは不要な側に背景点を追加します。",
-            "境界が硬いときは [フチをぼかす] を有効にし、値を少しずつ上げて確認します。",
+            "中クリック: 点を削除",
+            "まずは少ない点で試し、境界が不十分な場所だけ追加すると調整しやすくなります。",
         ),
     ),
     (
@@ -68,12 +59,6 @@ class HelpDialog(QDialog):
         title_label = QLabel("使い方", self)
         title_label.setObjectName("helpDialogTitle")
 
-        description_label = QLabel(
-            "画像の読み込みから透過 PNG の保存まで、基本操作を確認できます。",
-            self,
-        )
-        description_label.setObjectName("dialogDescriptionLabel")
-        description_label.setWordWrap(True)
 
         scroll_area = QScrollArea(self)
         scroll_area.setObjectName("helpScrollArea")
@@ -123,7 +108,6 @@ class HelpDialog(QDialog):
         footer_layout.addWidget(self.close_button)
 
         layout.addWidget(title_label)
-        layout.addWidget(description_label)
         layout.addWidget(scroll_area, 1)
         layout.addLayout(footer_layout)
 
