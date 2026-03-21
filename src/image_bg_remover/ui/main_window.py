@@ -424,7 +424,7 @@ class MainWindow(QMainWindow):
         self.model_combo.setItemDelegate(ModelComboItemDelegate(self.model_combo))
         self.model_combo.currentIndexChanged.connect(self._handle_model_changed)
 
-        self.create_mask_button = QPushButton("マスク作成", workflow_group)
+        self.create_mask_button = QPushButton("背景を削除", workflow_group)
         self.create_mask_button.setObjectName("primaryButton")
         self.create_mask_button.clicked.connect(self._handle_create_mask)
         self.soften_edges_checkbox = QCheckBox("フチをぼかす", workflow_group)
@@ -442,8 +442,6 @@ class MainWindow(QMainWindow):
         soften_edges_row.setSpacing(8)
         soften_edges_row.addWidget(self.soften_edges_checkbox, stretch=1)
         soften_edges_row.addWidget(self.feather_radius_spinbox, stretch=0)
-        self.remove_background_button = QPushButton("背景を削除", workflow_group)
-        self.remove_background_button.clicked.connect(self._handle_remove_background)
         self.save_result_button = QPushButton("結果を保存", workflow_group)
         self.save_result_button.clicked.connect(self._handle_save_result)
 
@@ -451,7 +449,6 @@ class MainWindow(QMainWindow):
         workflow_layout.addWidget(self.model_combo)
         workflow_layout.addWidget(self.create_mask_button)
         workflow_layout.addLayout(soften_edges_row)
-        workflow_layout.addWidget(self.remove_background_button)
         workflow_layout.addWidget(self.save_result_button)
 
         self.manage_models_button = QPushButton("モデル管理", sidebar)
@@ -593,24 +590,19 @@ class MainWindow(QMainWindow):
             self.feather_radius_spinbox.value(),
         )
 
-    def _handle_remove_background(self) -> None:
-        if self.inference_running:
-            return
+    def _apply_background_removal(self) -> None:
         if self.state.current_mask is None or self.state.source_image is None:
-            self._show_message_box(QMessageBox.Icon.Information, "マスク未作成", "先に[マスク作成]を実行してください。")
             return
 
         result_image = apply_mask_to_image(self.state.source_image, self.state.current_mask)
         self.state.set_background_removed_image(result_image)
         self.result_preview.set_image(result_image)
-        self._sync_ui()
-        self.statusBar().showMessage("背景を削除しました")
 
     def _handle_save_result(self) -> None:
         if self.inference_running:
             return
         if self.state.background_removed_image is None:
-            self._show_message_box(QMessageBox.Icon.Information, "保存対象なし", "先に[背景を削除]を実行してください。")
+            self._show_message_box(QMessageBox.Icon.Information, "保存対象なし", "先に[マスク作成]を実行してください。")
             return
 
         default_path = self._build_default_save_path()
@@ -692,11 +684,12 @@ class MainWindow(QMainWindow):
 
     def _handle_inference_finished(self, result: InferenceResult) -> None:
         self.state.set_mask(result.mask, result.overlay)
+        self._apply_background_removal()
         self.input_preview.set_mask_overlay(result.overlay)
         self.result_preview.set_image(self.state.background_removed_image)
         self._set_inference_running(False)
         self._sync_ui()
-        self.statusBar().showMessage(f"マスクを作成しました: model={result.model_key}, score={result.score:.3f}")
+        self.statusBar().showMessage(f"マスク作成と背景削除が完了しました: model={result.model_key}, score={result.score:.3f}")
 
     def _handle_inference_failed(self, message: str) -> None:
         self._set_inference_running(False)
@@ -724,7 +717,6 @@ class MainWindow(QMainWindow):
         self.load_button.setEnabled(idle)
         self.reset_button.setEnabled(idle and (has_points or has_mask or has_result))
         self.create_mask_button.setEnabled(idle and has_image and has_available_model)
-        self.remove_background_button.setEnabled(idle and has_mask)
         self.save_result_button.setEnabled(idle and has_result)
         self.model_combo.setEnabled(idle)
         self.manage_models_button.setEnabled(idle)
@@ -743,12 +735,12 @@ class MainWindow(QMainWindow):
         self.result_preview.set_image(self.state.background_removed_image)
 
         if self.inference_running:
-            self.result_info_label.setText("SAM2.1 でマスク作成中です")
+            self.result_info_label.setText("SAM2.1 でマスクを作成し、背景削除まで実行中です")
         elif has_result and self.state.background_removed_image is not None:
             result = self.state.background_removed_image
             self.result_info_label.setText(f"背景削除結果: {result.width()} x {result.height()} の透過画像")
         elif has_mask:
-            self.result_info_label.setText("SAM2.1 マスクを保持中です。[背景を削除] で透過画像を生成できます")
+            self.result_info_label.setText("SAM2.1 マスクを保持中です")
         else:
             self.result_info_label.setText("背景削除結果は未生成です")
 
