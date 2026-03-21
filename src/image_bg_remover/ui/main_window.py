@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRectF, QSettings, QThread, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QRectF, QSettings, QThread, Qt, Signal, Slot
 from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -41,6 +41,7 @@ from image_bg_remover.ui.theme import (
     COLOR_BG_DISABLED,
     COLOR_BORDER_DEFAULT,
     COLOR_BORDER_DISABLED,
+    COLOR_BORDER_STRONG,
     COLOR_CHECKER_DARK,
     COLOR_CHECKER_LIGHT,
     COLOR_TEXT_DISABLED,
@@ -48,6 +49,7 @@ from image_bg_remover.ui.theme import (
     COLOR_TEXT_PRIMARY,
     COLOR_TEXT_SECONDARY,
     COLOR_BG_APP,
+    COLOR_BG_PANEL,
     SIDEBAR_WIDTH,
 
 
@@ -238,8 +240,6 @@ class MainWindow(QMainWindow):
         self._source_image_revision = 0
         self.available_model_keys: set[str] = set()
         self._refresh_available_models(update_selection=True)
-        self._startup_model_dialog_pending = not self.available_model_keys
-        self._startup_help_dialog_pending = self._should_auto_show_help()
 
         self.inference_thread = QThread(self)
         self.inference_worker = InferenceWorker()
@@ -258,11 +258,6 @@ class MainWindow(QMainWindow):
         self._sync_ui()
         self._apply_styles()
         self.statusBar().showMessage("ready")
-
-    def showEvent(self, event) -> None:  # noqa: N802
-        super().showEvent(event)
-        if self._startup_help_dialog_pending or self._startup_model_dialog_pending:
-            QTimer.singleShot(0, self._run_startup_dialogs)
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self.inference_thread.quit()
@@ -328,18 +323,80 @@ class MainWindow(QMainWindow):
         self.settings.setValue(self.HELP_AUTO_SHOW_SETTINGS_KEY, enabled)
         self.settings.sync()
 
-    def _run_startup_dialogs(self) -> None:
-        if self._startup_help_dialog_pending:
-            self._startup_help_dialog_pending = False
-            self._open_help_dialog()
-        if self._startup_model_dialog_pending:
-            self._startup_model_dialog_pending = False
-            self._open_model_management_for_missing_models()
+    def _dismiss_help_banner(self) -> None:
+        self._set_auto_show_help(False)
+        self._sync_ui()
 
     def _open_help_dialog(self) -> None:
         dialog = HelpDialog(self._should_auto_show_help(), self)
         dialog.exec()
         self._set_auto_show_help(dialog.auto_show_enabled())
+        self._sync_ui()
+
+    def _update_startup_banners(self) -> None:
+        self.help_banner.setVisible(self._should_auto_show_help())
+        self.model_banner.setVisible(not self.available_model_keys)
+
+    def _create_startup_banner(
+        self,
+        title: str,
+        body: str,
+        action_specs: list[tuple[str, object]],
+    ) -> QFrame:
+        banner = QFrame(self)
+        banner.setObjectName("startupBanner")
+        banner.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        banner.setStyleSheet(
+            f"""
+            QFrame#startupBanner {{
+                background: {COLOR_BG_PANEL};
+                border: 1px solid {COLOR_BORDER_STRONG};
+                border-radius: 16px;
+            }}
+            QLabel#startupBannerTitle {{
+                color: {COLOR_TEXT_PRIMARY};
+                font-size: 16px;
+                font-weight: 700;
+                background: transparent;
+            }}
+            QLabel#startupBannerBody {{
+                color: {COLOR_TEXT_SECONDARY};
+                font-size: 13px;
+                background: transparent;
+            }}
+            """
+        )
+
+        layout = QHBoxLayout(banner)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(16)
+
+        text_column = QVBoxLayout()
+        text_column.setContentsMargins(0, 0, 0, 0)
+        text_column.setSpacing(4)
+
+        title_label = QLabel(title, banner)
+        title_label.setObjectName("startupBannerTitle")
+        body_label = QLabel(body, banner)
+        body_label.setObjectName("startupBannerBody")
+        body_label.setWordWrap(True)
+
+        text_column.addWidget(title_label)
+        text_column.addWidget(body_label)
+
+        actions_layout = QHBoxLayout()
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        actions_layout.setSpacing(8)
+        actions_layout.addStretch(1)
+
+        for label, handler in action_specs:
+            button = QPushButton(label, banner)
+            button.clicked.connect(handler)
+            actions_layout.addWidget(button)
+
+        layout.addLayout(text_column, stretch=1)
+        layout.addLayout(actions_layout, stretch=0)
+        return banner
 
     def _refresh_available_models(self, update_selection: bool = False) -> None:
         self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.is_available()}
@@ -352,8 +409,30 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget(self)
         central.setObjectName("windowRoot")
-        root_layout = QHBoxLayout(central)
-        root_layout.setContentsMargins(24, 24, 24, 24)
+        outer_layout = QVBoxLayout(central)
+        outer_layout.setContentsMargins(24, 24, 24, 24)
+        outer_layout.setSpacing(16)
+
+        self.help_banner = self._create_startup_banner(
+            "ようこそ",
+            "基本的な使い方や操作のコツを確認できます。必要なタイミングでヘルプを開いてください。",
+            [("使い方を見る", self._open_help_dialog), ("次回から非表示", self._dismiss_help_banner)],
+        )
+        self.model_banner = self._create_startup_banner(
+            "SAM2.1モデルが未配置です",
+            "背景削除を実行するには、少なくとも1つのモデルを配置またはダウンロードしてください。",
+            [("モデル管理を開く", self._open_model_management_for_missing_models)],
+        )
+
+        banner_layout = QVBoxLayout()
+        banner_layout.setContentsMargins(0, 0, 0, 0)
+        banner_layout.setSpacing(12)
+        banner_layout.addWidget(self.help_banner)
+        banner_layout.addWidget(self.model_banner)
+        outer_layout.addLayout(banner_layout)
+
+        root_layout = QHBoxLayout()
+        root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(20)
 
         content_scroll_area = QScrollArea(central)
@@ -432,6 +511,7 @@ class MainWindow(QMainWindow):
 
         root_layout.addWidget(content_scroll_area, stretch=1)
         root_layout.addWidget(sidebar_scroll_area, stretch=0)
+        outer_layout.addLayout(root_layout, stretch=1)
 
         self.setCentralWidget(central)
 
@@ -775,6 +855,7 @@ class MainWindow(QMainWindow):
         self.busy_value.setText("はい" if self.inference_running else "いいえ")
 
         self.result_preview.set_image(self.state.background_removed_image)
+        self._update_startup_banners()
 
         if self.inference_running:
             self.result_info_label.setText("SAM2.1 でマスクを作成し、背景削除まで実行中です")
