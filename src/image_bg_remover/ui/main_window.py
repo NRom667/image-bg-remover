@@ -6,6 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -194,8 +195,8 @@ class InferenceWorker(QObject):
         super().__init__()
         self._engine: SamInferenceEngine | None = None
 
-    @Slot(str, object, object, object)
-    def run_inference(self, model_key: str, source_image: QImage, foreground_points, background_points) -> None:
+    @Slot(str, object, object, object, bool)
+    def run_inference(self, model_key: str, source_image: QImage, foreground_points, background_points, soften_edges: bool) -> None:
         try:
             if self._engine is None:
                 self._engine = SamInferenceEngine()
@@ -204,6 +205,7 @@ class InferenceWorker(QObject):
                 source_image,
                 list(foreground_points),
                 list(background_points),
+                soften_edges=soften_edges,
             )
         except Exception as exc:
             self.failed.emit(str(exc))
@@ -212,7 +214,7 @@ class InferenceWorker(QObject):
 
 
 class MainWindow(QMainWindow):
-    inference_requested = Signal(str, object, object, object)
+    inference_requested = Signal(str, object, object, object, bool)
 
     def __init__(self) -> None:
         super().__init__()
@@ -423,6 +425,8 @@ class MainWindow(QMainWindow):
         self.create_mask_button = QPushButton("マスク作成", workflow_group)
         self.create_mask_button.setObjectName("primaryButton")
         self.create_mask_button.clicked.connect(self._handle_create_mask)
+        self.soften_edges_checkbox = QCheckBox("フチをぼかす", workflow_group)
+        self.soften_edges_checkbox.setChecked(True)
         self.remove_background_button = QPushButton("背景を削除", workflow_group)
         self.remove_background_button.clicked.connect(self._handle_remove_background)
         self.save_result_button = QPushButton("結果を保存", workflow_group)
@@ -431,6 +435,7 @@ class MainWindow(QMainWindow):
         workflow_layout.addWidget(self.load_button)
         workflow_layout.addWidget(self.model_combo)
         workflow_layout.addWidget(self.create_mask_button)
+        workflow_layout.addWidget(self.soften_edges_checkbox)
         workflow_layout.addWidget(self.remove_background_button)
         workflow_layout.addWidget(self.save_result_button)
 
@@ -570,6 +575,7 @@ class MainWindow(QMainWindow):
             self.state.source_image.copy(),
             list(self.state.foreground_points),
             list(self.state.background_points),
+            self.soften_edges_checkbox.isChecked(),
         )
 
     def _handle_remove_background(self) -> None:
@@ -706,6 +712,7 @@ class MainWindow(QMainWindow):
         self.save_result_button.setEnabled(idle and has_result)
         self.model_combo.setEnabled(idle)
         self.manage_models_button.setEnabled(idle)
+        self.soften_edges_checkbox.setEnabled(idle and has_image)
 
         self.image_state_value.setText("読込済み" if has_image else "未読込")
         self.mask_state_value.setText("作成済み" if has_mask else "未作成")

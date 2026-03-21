@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -9,7 +9,7 @@ from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 from image_bg_remover.config import get_model_definition
-from image_bg_remover.masking import build_mask_overlay
+from image_bg_remover.masking import build_mask_overlay, feather_mask
 from image_bg_remover.state import PromptPoint
 
 
@@ -25,7 +25,14 @@ class SamInferenceEngine:
     def __init__(self) -> None:
         self._predictors: dict[str, SAM2ImagePredictor] = {}
 
-    def predict_mask(self, model_key: str, source_image: QImage, foreground_points: list[PromptPoint], background_points: list[PromptPoint]) -> InferenceResult:
+    def predict_mask(
+        self,
+        model_key: str,
+        source_image: QImage,
+        foreground_points: list[PromptPoint],
+        background_points: list[PromptPoint],
+        soften_edges: bool = True,
+    ) -> InferenceResult:
         predictor = self._get_predictor(model_key)
         image_array = self._qimage_to_numpy_rgb(source_image)
         predictor.set_image(image_array)
@@ -43,6 +50,8 @@ class SamInferenceEngine:
         best_index = int(np.argmax(scores))
         best_mask = masks[best_index]
         mask_image = self._mask_array_to_qimage(best_mask)
+        if soften_edges:
+            mask_image = feather_mask(mask_image, radius=2.0)
         overlay = build_mask_overlay(mask_image)
         return InferenceResult(mask=mask_image, overlay=overlay, score=float(scores[best_index]), model_key=model_key)
 

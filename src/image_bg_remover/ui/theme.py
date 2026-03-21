@@ -196,6 +196,36 @@ def main_window_stylesheet() -> str:
     QPushButton#tertiaryButton {{
         background: {COLOR_BG_PANEL};
     }}
+    QCheckBox {{
+        color: {COLOR_TEXT_PRIMARY};
+        font-family: "{FONT_FAMILY}";
+        font-size: 14px;
+        spacing: 8px;
+        background: transparent;
+    }}
+    QCheckBox:disabled {{
+        color: {COLOR_TEXT_DISABLED};
+    }}
+    QCheckBox::indicator {{
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        border: 1px solid {COLOR_BORDER_DEFAULT};
+        background: {COLOR_BG_CARD};
+    }}
+    QCheckBox::indicator:hover {{
+        border: 1px solid {COLOR_BORDER_STRONG};
+        background: {COLOR_BG_HOVER};
+    }}
+    QCheckBox::indicator:checked {{
+        border: 1px solid {COLOR_ACCENT_PRIMARY};
+        background: {COLOR_ACCENT_PRIMARY};
+        image: url(images/checkbox-check.svg);
+    }}
+    QCheckBox::indicator:disabled {{
+        border: 1px solid {COLOR_BORDER_DISABLED};
+        background: {COLOR_BG_DISABLED};
+    }}
     QComboBox {{
         padding-right: 36px;
     }}

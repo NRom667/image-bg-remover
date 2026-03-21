@@ -1,5 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
+import math
+
+import numpy as np
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
 
@@ -59,5 +62,49 @@ def apply_mask_to_image(source_image: QImage, mask: QImage) -> QImage:
     return result
 
 
+def feather_mask(mask: QImage, radius: float = 2.0) -> QImage:
+    if radius <= 0:
+        return mask.convertToFormat(QImage.Format.Format_Grayscale8)
+
+    mask_gray = mask.convertToFormat(QImage.Format.Format_Grayscale8)
+    mask_array = _qimage_to_numpy_gray(mask_gray).astype(np.float32)
+    kernel = _build_gaussian_kernel(radius)
+    blurred = _convolve_axis(_convolve_axis(mask_array, kernel, axis=1), kernel, axis=0)
+    blurred = np.clip(np.rint(blurred), 0, 255).astype(np.uint8)
+    return _numpy_gray_to_qimage(blurred)
+
+
 def _draw_soft_circle(painter: QPainter, center: QPointF, radius: float) -> None:
     painter.drawEllipse(center, radius, radius)
+
+
+def _build_gaussian_kernel(radius: float) -> np.ndarray:
+    sigma = max(radius, 0.5)
+    kernel_radius = max(1, int(math.ceil(sigma * 2.5)))
+    offsets = np.arange(-kernel_radius, kernel_radius + 1, dtype=np.float32)
+    kernel = np.exp(-(offsets**2) / (2.0 * sigma * sigma))
+    kernel /= kernel.sum()
+    return kernel
+
+
+def _convolve_axis(array: np.ndarray, kernel: np.ndarray, axis: int) -> np.ndarray:
+    pad = len(kernel) // 2
+    pad_width = [(0, 0)] * array.ndim
+    pad_width[axis] = (pad, pad)
+    padded = np.pad(array, pad_width, mode="edge")
+    return np.apply_along_axis(lambda row: np.convolve(row, kernel, mode="valid"), axis, padded)
+
+
+def _qimage_to_numpy_gray(image: QImage) -> np.ndarray:
+    width = image.width()
+    height = image.height()
+    bytes_per_line = image.bytesPerLine()
+    ptr = image.constBits()
+    array = np.frombuffer(ptr, dtype=np.uint8, count=bytes_per_line * height)
+    return array.reshape((height, bytes_per_line))[:, :width].copy()
+
+
+def _numpy_gray_to_qimage(array: np.ndarray) -> QImage:
+    contiguous = np.ascontiguousarray(array)
+    height, width = contiguous.shape
+    return QImage(contiguous.data, width, height, width, QImage.Format.Format_Grayscale8).copy()
