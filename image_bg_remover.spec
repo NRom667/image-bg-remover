@@ -45,10 +45,12 @@ def _should_exclude_toc_entry(dest_name: str) -> bool:
         'pywin32_system32/',
         'win32/',
         'win32com/',
+        'torch/testing/',
     )
     excluded_names = (
         'pil/_avif.cp314-win_amd64.pyd',
         'pil/_webp.cp314-win_amd64.pyd',
+        'torch/bin/protoc.exe',
         'pyside6/plugins/imageformats/qicns.dll',
         'pyside6/plugins/imageformats/qpdf.dll',
         'pyside6/plugins/imageformats/qsvg.dll',
