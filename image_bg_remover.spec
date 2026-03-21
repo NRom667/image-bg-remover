@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
@@ -10,6 +10,7 @@ block_cipher = None
 
 src_dir = PROJECT_ROOT / 'src'
 main_script = PROJECT_ROOT / 'main.py'
+icon_file = PROJECT_ROOT / 'images' / 'icon.ico'
 
 hiddenimports = []
 hiddenimports += collect_submodules('sam2')
@@ -45,6 +46,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='ImageBGRemover',
+    icon=str(icon_file),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -63,3 +65,4 @@ coll = COLLECT(
     upx_exclude=[],
     name='ImageBGRemover',
 )
+
