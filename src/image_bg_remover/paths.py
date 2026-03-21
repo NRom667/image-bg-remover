@@ -37,3 +37,18 @@ def get_models_dir() -> Path:
             return bundled_models_dir
 
     return runtime_models_dir
+
+def get_image_asset_path(file_name: str) -> Path:
+    runtime_images_dir = get_app_root() / 'images'
+    runtime_image_path = runtime_images_dir / file_name
+    if runtime_image_path.exists():
+        return runtime_image_path
+
+    bundle_root = get_bundle_root()
+    if bundle_root is not None:
+        bundled_image_path = bundle_root / 'images' / file_name
+        if bundled_image_path.exists():
+            return bundled_image_path
+
+    return PROJECT_ROOT / 'images' / file_name
+

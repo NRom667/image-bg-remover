@@ -2,6 +2,8 @@
 
 from PySide6.QtGui import QColor, QFont
 
+from image_bg_remover.paths import get_image_asset_path
+
 FONT_FAMILY = "Segoe UI"
 
 SPACE_4 = 4
@@ -55,6 +57,15 @@ COLOR_POINT_GLYPH = "#ffffff"
 
 COLOR_CHECKER_LIGHT = "#fbf7ef"
 COLOR_CHECKER_DARK = "#efe3d0"
+
+
+def asset_url(file_name: str) -> str:
+    return get_image_asset_path(file_name).resolve().as_posix()
+
+
+CHECKBOX_CHECK_ICON = asset_url('checkbox-check.svg')
+SPIN_UP_ICON = asset_url('spin-up.svg')
+SPIN_DOWN_ICON = asset_url('spin-down.svg')
 
 
 def create_app_font() -> QFont:
@@ -220,7 +231,7 @@ def main_window_stylesheet() -> str:
     QCheckBox::indicator:checked {{
         border: 1px solid {COLOR_ACCENT_PRIMARY};
         background: {COLOR_ACCENT_PRIMARY};
-        image: url(images/checkbox-check.svg);
+        image: url("{CHECKBOX_CHECK_ICON}");
     }}
     QCheckBox::indicator:disabled {{
         border: 1px solid {COLOR_BORDER_DISABLED};
@@ -251,12 +262,12 @@ def main_window_stylesheet() -> str:
     QDoubleSpinBox::up-arrow {{
         width: 8px;
         height: 5px;
-        image: url(images/spin-up.svg);
+        image: url("{SPIN_UP_ICON}");
     }}
     QDoubleSpinBox::down-arrow {{
         width: 8px;
         height: 5px;
-        image: url(images/spin-down.svg);
+        image: url("{SPIN_DOWN_ICON}");
     }}
     QComboBox QAbstractItemView {{
         background: {COLOR_BG_CARD};
@@ -451,7 +462,7 @@ def dialog_stylesheet() -> str:
     QCheckBox::indicator:checked {{
         border: 1px solid {COLOR_ACCENT_PRIMARY};
         background: {COLOR_ACCENT_PRIMARY};
-        image: url(images/checkbox-check.svg);
+        image: url("{CHECKBOX_CHECK_ICON}");
     }}
     QProgressBar {{
         min-height: 12px;

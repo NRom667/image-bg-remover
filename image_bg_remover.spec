@@ -22,6 +22,7 @@ hiddenimports += collect_submodules('antlr4')
 datas = []
 datas += collect_data_files('sam2')
 datas += [(str(PROJECT_ROOT / 'models'), 'models')]
+datas += [(str(PROJECT_ROOT / 'images'), 'images')]
 
 a = Analysis(
     [str(main_script)],
