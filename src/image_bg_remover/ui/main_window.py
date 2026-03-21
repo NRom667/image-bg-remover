@@ -433,7 +433,7 @@ class MainWindow(QMainWindow):
         self.feather_radius_spinbox.setRange(0.1, 20.0)
         self.feather_radius_spinbox.setSingleStep(0.1)
         self.feather_radius_spinbox.setDecimals(1)
-        self.feather_radius_spinbox.setValue(2.0)
+        self.feather_radius_spinbox.setValue(1.5)
         self.feather_radius_spinbox.setSuffix(" px")
         self.feather_radius_spinbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.feather_radius_spinbox.setFixedSize(72, 24)

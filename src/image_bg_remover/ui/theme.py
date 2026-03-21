@@ -233,17 +233,30 @@ def main_window_stylesheet() -> str:
         min-width: 60px;
         min-height: 20px;
         border-radius: 9px;
-        padding: 0px 8px 4px 8px;
+        padding: 0px 12px 4px 8px;
         font-size: 13px;
     }}
     QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
         width: 16px;
         border: none;
         background: transparent;
+        subcontrol-origin: padding;
     }}
-    QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {{
-        width: 0px;
-        height: 0px;
+    QDoubleSpinBox::up-button {{
+        subcontrol-position: top right;
+    }}
+    QDoubleSpinBox::down-button {{
+        subcontrol-position: bottom right;
+    }}
+    QDoubleSpinBox::up-arrow {{
+        width: 8px;
+        height: 5px;
+        image: url(images/spin-up.svg);
+    }}
+    QDoubleSpinBox::down-arrow {{
+        width: 8px;
+        height: 5px;
+        image: url(images/spin-down.svg);
     }}
     QComboBox QAbstractItemView {{
         background: {COLOR_BG_CARD};
