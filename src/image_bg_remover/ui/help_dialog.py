@@ -49,7 +49,7 @@ class HelpDialog(QDialog):
     def __init__(self, auto_show_enabled: bool, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("使い方")
-        self.resize(780, 620)
+        self.resize(820, 620)
         self.setModal(True)
 
         layout = QVBoxLayout(self)
@@ -57,6 +57,7 @@ class HelpDialog(QDialog):
         layout.setSpacing(16)
 
         title_label = QLabel("使い方", self)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
         title_label.setObjectName("helpDialogTitle")
 
 
@@ -92,12 +93,14 @@ class HelpDialog(QDialog):
             heading_label.setContentsMargins(0, 0, 0, 0)
 
             body_label = QLabel("\n".join(paragraphs), section_frame)
+
             body_label.setObjectName("helpSectionBody")
             body_label.setWordWrap(True)
             body_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             body_label.setIndent(0)
             body_label.setContentsMargins(0, 0, 0, 0)
             body_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            
 
             section_layout.addWidget(heading_label)
             section_layout.addWidget(body_label)

@@ -86,7 +86,6 @@ class AppState:
             self.foreground_points.append(point)
         else:
             self.background_points.append(point)
-        self.reset_processing()
 
     def remove_nearest_point(self, x: float, y: float, max_distance: float) -> PromptPoint | None:
         nearest: tuple[str, int, float] | None = None
@@ -100,7 +99,6 @@ class AppState:
             return None
 
         kind, index, _ = nearest
-        self.reset_processing()
         if kind == "positive":
             return self.foreground_points.pop(index)
         return self.background_points.pop(index)

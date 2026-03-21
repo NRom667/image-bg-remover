@@ -352,14 +352,14 @@ def dialog_stylesheet() -> str:
     }}
     QLabel#helpSectionTitle {{
         color: {COLOR_TEXT_PRIMARY};
-        font-size: 22px;
+        font-size: 26px;
         font-weight: 700;
         margin: 0 0 4px 0;
         padding: 0;
     }}
     QLabel#helpSectionBody {{
         color: {COLOR_TEXT_SECONDARY};
-        font-size: 18px;
+        font-size: 20px;
         font-weight: 500;
         line-height: 2.0;
         margin: 0 0 0 10px;
