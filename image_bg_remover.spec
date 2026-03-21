@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
+from typing import Iterable
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
@@ -24,6 +25,44 @@ datas += collect_data_files('sam2')
 datas += [(str(PROJECT_ROOT / 'models'), 'models')]
 datas += [(str(PROJECT_ROOT / 'images'), 'images')]
 
+excluded_modules = [
+    'Pythonwin',
+    'pywin32_system32',
+    'pythoncom',
+    'pywintypes',
+    'win32',
+    'win32api',
+    'win32com',
+    'win32con',
+    'win32ui',
+]
+
+
+def _should_exclude_toc_entry(dest_name: str) -> bool:
+    normalized = dest_name.replace('\\', '/').lower()
+    excluded_prefixes = (
+        'pythonwin/',
+        'pywin32_system32/',
+        'win32/',
+        'win32com/',
+    )
+    excluded_names = (
+        'pil/_avif.cp314-win_amd64.pyd',
+        'pil/_webp.cp314-win_amd64.pyd',
+        'pyside6/plugins/imageformats/qicns.dll',
+        'pyside6/plugins/imageformats/qpdf.dll',
+        'pyside6/plugins/imageformats/qsvg.dll',
+        'pyside6/plugins/imageformats/qtga.dll',
+        'pyside6/plugins/imageformats/qtiff.dll',
+        'pyside6/plugins/imageformats/qwbmp.dll',
+        'pyside6/plugins/imageformats/qwebp.dll',
+    )
+    return normalized.startswith(excluded_prefixes) or any(normalized.endswith(name) for name in excluded_names)
+
+
+def _filter_toc_entries(entries: Iterable[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    return [entry for entry in entries if not _should_exclude_toc_entry(entry[0])]
+
 a = Analysis(
     [str(main_script)],
     pathex=[str(PROJECT_ROOT), str(src_dir)],
@@ -33,12 +72,14 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excluded_modules,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
+a.binaries = _filter_toc_entries(a.binaries)
+a.datas = _filter_toc_entries(a.datas)
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
