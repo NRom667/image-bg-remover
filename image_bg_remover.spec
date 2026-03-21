@@ -1,17 +1,66 @@
 ﻿from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Iterable
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.win32.versioninfo import (
+    VSVersionInfo,
+    FixedFileInfo,
+    StringFileInfo,
+    StringStruct,
+    StringTable,
+    VarFileInfo,
+    VarStruct,
+)
 
-from image_bg_remover.paths import PROJECT_ROOT
+PROJECT_ROOT = Path.cwd().resolve()
+src_dir = PROJECT_ROOT / 'src'
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+
+from image_bg_remover import __version__
 
 block_cipher = None
 
-src_dir = PROJECT_ROOT / 'src'
 main_script = PROJECT_ROOT / 'main.py'
 icon_file = PROJECT_ROOT / 'images' / 'icon.ico'
+version_parts = [int(part) for part in __version__.split('.')]
+file_version = tuple((version_parts + [0] * 4)[:4])
+file_version_text = '.'.join(str(part) for part in file_version)
+
+version_info = VSVersionInfo(
+    ffi=FixedFileInfo(
+        filevers=file_version,
+        prodvers=file_version,
+        mask=0x3F,
+        flags=0x0,
+        OS=0x40004,
+        fileType=0x1,
+        subtype=0x0,
+        date=(0, 0),
+    ),
+    kids=[
+        StringFileInfo(
+            [
+                StringTable(
+                    '040904B0',
+                    [
+                        StringStruct('CompanyName', 'Rom'),
+                        StringStruct('FileDescription', 'BG Remover'),
+                        StringStruct('FileVersion', file_version_text),
+                        StringStruct('InternalName', 'BGRemover'),
+                        StringStruct('OriginalFilename', 'BGRemover.exe'),
+                        StringStruct('ProductName', 'BG Remover'),
+                        StringStruct('ProductVersion', file_version_text),
+                    ],
+                )
+            ]
+        ),
+        VarFileInfo([VarStruct('Translation', [1033, 1200])]),
+    ],
+)
 
 hiddenimports = []
 hiddenimports += collect_submodules('sam2')
@@ -89,8 +138,9 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='ImageBGRemover',
+    name='BGRemover',
     icon=str(icon_file),
+    version=version_info,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

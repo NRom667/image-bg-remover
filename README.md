@@ -27,3 +27,8 @@
 
 # AIの使用について
 このアプリの作成にあたっては、codexを活用しています。
+
+# ビルド方法・コマンド等メモ
+- ビルドせず直実行する場合: python main.py
+- build：scripts\build_windows.ps1を実行
+- バージョン情報：src\__init__.pyに記載
