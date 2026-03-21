@@ -128,11 +128,15 @@ class SamInferenceEngine:
         converted = image.convertToFormat(QImage.Format.Format_RGB888)
         width = converted.width()
         height = converted.height()
+        bytes_per_line = converted.bytesPerLine()
         ptr = converted.constBits()
-        return np.frombuffer(ptr, dtype=np.uint8).reshape((height, width, 3)).copy()
+        array = np.frombuffer(ptr, dtype=np.uint8, count=bytes_per_line * height)
+        return array.reshape((height, bytes_per_line))[:, : width * 3].reshape((height, width, 3)).copy()
 
     def _mask_array_to_qimage(self, mask: np.ndarray) -> QImage:
         mask_uint8 = (mask > 0).astype(np.uint8) * 255
         height, width = mask_uint8.shape
         bytes_per_line = width
         return QImage(mask_uint8.data, width, height, bytes_per_line, QImage.Format.Format_Grayscale8).copy()
+
+

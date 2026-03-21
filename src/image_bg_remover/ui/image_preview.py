@@ -1,7 +1,9 @@
 ﻿from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QFont, QImage, QMouseEvent, QPainter, QPen, QPixmap
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFont, QImage, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from image_bg_remover.state import ImageViewportMapping, PromptPoint
@@ -21,6 +23,7 @@ from image_bg_remover.ui.theme import (
 class ImagePreviewWidget(QWidget):
     mapping_changed = Signal(object)
     interaction_requested = Signal(object, float, float, float)
+    image_drop_requested = Signal(str)
 
     def __init__(self, placeholder_text: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -34,6 +37,7 @@ class ImagePreviewWidget(QWidget):
         self._background_points: list[PromptPoint] = []
         self.setMinimumHeight(280)
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
 
     def set_image(self, image: QImage | None) -> None:
         self._image = image
@@ -73,6 +77,20 @@ class ImagePreviewWidget(QWidget):
         delete_threshold = 18.0 / scale
         self.interaction_requested.emit(event.button(), image_point.x(), image_point.y(), delete_threshold)
         event.accept()
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if self._extract_dropped_image_path(event) is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        image_path = self._extract_dropped_image_path(event)
+        if image_path is None:
+            event.ignore()
+            return
+        self.image_drop_requested.emit(str(image_path))
+        event.acceptProposedAction()
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -197,5 +215,23 @@ class ImagePreviewWidget(QWidget):
                 col += 1
             y += tile
             row += 1
+
+    def _extract_dropped_image_path(self, event: QDragEnterEvent | QDropEvent) -> Path | None:
+        mime_data = event.mimeData()
+        if not mime_data.hasUrls():
+            return None
+
+        urls = mime_data.urls()
+        if len(urls) != 1:
+            return None
+
+        url = urls[0]
+        if not url.isLocalFile():
+            return None
+
+        image_path = Path(url.toLocalFile())
+        if image_path.suffix.lower() not in {'.jpg', '.jpeg', '.png'}:
+            return None
+        return image_path
 
 

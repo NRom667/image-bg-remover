@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QSettings, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -252,12 +252,27 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Image BG Remover")
         self.resize(1400, 900)
         self.setMinimumSize(920, 620)
+        self.setAcceptDrops(True)
 
         self._build_ui()
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
         self.statusBar().showMessage("ready")
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if self._extract_dropped_image_path(event) is None or self.inference_running:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        image_path = self._extract_dropped_image_path(event)
+        if image_path is None or self.inference_running:
+            event.ignore()
+            return
+        self._load_image_from_path(image_path)
+        event.acceptProposedAction()
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -381,12 +396,13 @@ class MainWindow(QMainWindow):
         input_layout.setSpacing(10)
 
         self.input_preview = ImagePreviewWidget(
-            placeholder_text="[画像読込] ボタンでjpg/png画像を読み込んでください",
+            placeholder_text="[画像読込] またはドラッグ&ドロップで jpg/png 画像を読み込んでください",
             parent=input_group,
         )
         self.input_preview.setMinimumHeight(600)
         self.input_preview.mapping_changed.connect(self._handle_mapping_changed)
         self.input_preview.interaction_requested.connect(self._handle_preview_interaction)
+        self.input_preview.image_drop_requested.connect(self._handle_dropped_image)
 
         input_layout.addWidget(self.input_preview)
 
@@ -577,15 +593,22 @@ class MainWindow(QMainWindow):
         if not selected_file:
             return
 
-        image_path = Path(selected_file)
+        self._load_image_from_path(Path(selected_file))
+
+    def _handle_dropped_image(self, image_path: str) -> None:
+        if self.inference_running:
+            return
+        self._load_image_from_path(Path(image_path))
+
+    def _load_image_from_path(self, image_path: Path) -> bool:
         if image_path.suffix.lower() not in SUPPORTED_IMAGE_EXTENSIONS:
             self._show_message_box(QMessageBox.Icon.Warning, "非対応形式", "jpg/jpeg/png のみ対応しています。")
-            return
+            return False
 
         image = QImage(str(image_path))
         if image.isNull():
             self._show_message_box(QMessageBox.Icon.Warning, "読込失敗", "画像を読み込めませんでした。")
-            return
+            return False
 
         self.state.set_image(image_path, image)
         self._source_image_revision += 1
@@ -595,6 +618,25 @@ class MainWindow(QMainWindow):
         self.result_preview.set_image(None)
         self._sync_ui()
         self.statusBar().showMessage(f"画像を読み込みました: {image_path.name}")
+        return True
+
+    def _extract_dropped_image_path(self, event: QDragEnterEvent | QDropEvent) -> Path | None:
+        mime_data = event.mimeData()
+        if not mime_data.hasUrls():
+            return None
+
+        urls = mime_data.urls()
+        if len(urls) != 1:
+            return None
+
+        url = urls[0]
+        if not url.isLocalFile():
+            return None
+
+        image_path = Path(url.toLocalFile())
+        if image_path.suffix.lower() not in SUPPORTED_IMAGE_EXTENSIONS:
+            return None
+        return image_path
 
     def _handle_reset(self) -> None:
         if self.inference_running:
