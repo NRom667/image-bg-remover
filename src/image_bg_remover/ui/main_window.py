@@ -197,8 +197,17 @@ class InferenceWorker(QObject):
         super().__init__()
         self._engine: SamInferenceEngine | None = None
 
-    @Slot(str, object, object, object, bool, float)
-    def run_inference(self, model_key: str, source_image: QImage, foreground_points, background_points, soften_edges: bool, feather_radius: float) -> None:
+    @Slot(str, object, object, object, bool, float, int)
+    def run_inference(
+        self,
+        model_key: str,
+        source_image: QImage,
+        foreground_points,
+        background_points,
+        soften_edges: bool,
+        feather_radius: float,
+        source_image_revision: int,
+    ) -> None:
         try:
             if self._engine is None:
                 self._engine = SamInferenceEngine()
@@ -209,6 +218,7 @@ class InferenceWorker(QObject):
                 list(background_points),
                 soften_edges=soften_edges,
                 feather_radius=feather_radius,
+                source_image_key=source_image_revision,
             )
         except Exception as exc:
             self.failed.emit(str(exc))
@@ -217,7 +227,7 @@ class InferenceWorker(QObject):
 
 
 class MainWindow(QMainWindow):
-    inference_requested = Signal(str, object, object, object, bool, float)
+    inference_requested = Signal(str, object, object, object, bool, float, int)
     HELP_AUTO_SHOW_SETTINGS_KEY = "ui/show_help_on_startup"
 
     def __init__(self) -> None:
@@ -225,6 +235,7 @@ class MainWindow(QMainWindow):
         self.state = AppState()
         self.inference_running = False
         self.settings = QSettings()
+        self._source_image_revision = 0
         self.available_model_keys: set[str] = set()
         self._refresh_available_models(update_selection=True)
         self._startup_model_dialog_pending = not self.available_model_keys
@@ -577,6 +588,7 @@ class MainWindow(QMainWindow):
             return
 
         self.state.set_image(image_path, image)
+        self._source_image_revision += 1
         self.input_preview.set_image(image)
         self.input_preview.set_mask_overlay(None)
         self.input_preview.set_points(self.state.foreground_points, self.state.background_points)
@@ -611,11 +623,12 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{self.model_combo.currentText()} でマスクを作成中...")
         self.inference_requested.emit(
             self.state.selected_model_key,
-            self.state.source_image,
+            self.state.source_image.copy(),
             list(self.state.foreground_points),
             list(self.state.background_points),
             self.soften_edges_checkbox.isChecked(),
             self.feather_radius_spinbox.value(),
+            self._source_image_revision,
         )
 
     def _apply_background_removal(self) -> None:

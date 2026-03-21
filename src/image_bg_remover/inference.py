@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
-import torch
 from PySide6.QtGui import QImage
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 from image_bg_remover.config import get_model_definition
 from image_bg_remover.masking import build_mask_overlay, feather_mask
@@ -23,8 +21,11 @@ class InferenceResult:
 
 class SamInferenceEngine:
     def __init__(self) -> None:
-        self._predictors: dict[str, SAM2ImagePredictor] = {}
+        self._predictors: dict[str, Any] = {}
         self._prepared_image_keys: dict[str, int] = {}
+        self._torch: Any | None = None
+        self._sam2_image_predictor_cls: Any | None = None
+        self._build_sam2: Any | None = None
 
     def predict_mask(
         self,
@@ -34,12 +35,14 @@ class SamInferenceEngine:
         background_points: list[PromptPoint],
         soften_edges: bool = True,
         feather_radius: float = 2.0,
+        source_image_key: int | None = None,
     ) -> InferenceResult:
         predictor = self._get_predictor(model_key)
-        self._prepare_image(model_key, predictor, source_image)
+        self._prepare_image(model_key, predictor, source_image, source_image_key=source_image_key)
 
         point_coords, point_labels = self._build_prompt_arrays(foreground_points, background_points)
         multimask_output = len(point_coords) == 1
+        torch = self._get_torch_module()
 
         with torch.inference_mode():
             masks, scores, _ = predictor.predict(
@@ -56,7 +59,7 @@ class SamInferenceEngine:
         overlay = build_mask_overlay(mask_image)
         return InferenceResult(mask=mask_image, overlay=overlay, score=float(scores[best_index]), model_key=model_key)
 
-    def _get_predictor(self, model_key: str) -> SAM2ImagePredictor:
+    def _get_predictor(self, model_key: str) -> Any:
         cached = self._predictors.get(model_key)
         if cached is not None:
             return cached
@@ -69,19 +72,48 @@ class SamInferenceEngine:
         if not model_definition.config_path.exists():
             raise FileNotFoundError(f"Config not found: {model_definition.config_path}")
 
+        build_sam2 = self._get_build_sam2()
+        predictor_cls = self._get_sam2_image_predictor_cls()
         model = build_sam2(str(model_definition.config_path), str(model_definition.checkpoint_path), device="cpu")
-        predictor = SAM2ImagePredictor(model)
+        predictor = predictor_cls(model)
         self._predictors[model_key] = predictor
         return predictor
 
-    def _prepare_image(self, model_key: str, predictor: SAM2ImagePredictor, source_image: QImage) -> None:
-        image_key = int(source_image.cacheKey())
+    def _prepare_image(
+        self,
+        model_key: str,
+        predictor: Any,
+        source_image: QImage,
+        source_image_key: int | None = None,
+    ) -> None:
+        image_key = int(source_image.cacheKey()) if source_image_key is None else int(source_image_key)
         if self._prepared_image_keys.get(model_key) == image_key:
             return
 
         image_array = self._qimage_to_numpy_rgb(source_image)
         predictor.set_image(image_array)
         self._prepared_image_keys[model_key] = image_key
+
+    def _get_torch_module(self) -> Any:
+        if self._torch is None:
+            import torch
+
+            self._torch = torch
+        return self._torch
+
+    def _get_sam2_image_predictor_cls(self) -> Any:
+        if self._sam2_image_predictor_cls is None:
+            from sam2.sam2_image_predictor import SAM2ImagePredictor
+
+            self._sam2_image_predictor_cls = SAM2ImagePredictor
+        return self._sam2_image_predictor_cls
+
+    def _get_build_sam2(self) -> Any:
+        if self._build_sam2 is None:
+            from sam2.build_sam import build_sam2
+
+            self._build_sam2 = build_sam2
+        return self._build_sam2
 
     def _build_prompt_arrays(self, foreground_points: list[PromptPoint], background_points: list[PromptPoint]) -> tuple[np.ndarray, np.ndarray]:
         prompt_points = [*foreground_points, *background_points]
