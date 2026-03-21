@@ -7,7 +7,6 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 from image_bg_remover.logging_utils import configure_logging, install_exception_hook
-from image_bg_remover.ui.main_window import MainWindow
 from image_bg_remover.ui.theme import create_app_font
 
 
@@ -21,6 +20,8 @@ def _preload_inference_runtime() -> None:
 
 
 def run() -> int:
+    from image_bg_remover.ui.main_window import MainWindow
+
     configure_logging()
 
     app = QApplication(sys.argv)
