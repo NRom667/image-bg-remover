@@ -32,3 +32,7 @@
 - ビルドせず直実行する場合: python main.py
 - build：scripts\build_windows.ps1を実行
 - バージョン情報：src\__init__.pyに記載
+
+# ライセンス
+- このアプリ本体のライセンスは `LICENSE` を参照してください。
+- サードパーティライブラリのライセンス情報は `THIRD_PARTY_LICENSES.txt` を参照してください。

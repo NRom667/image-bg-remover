@@ -1,0 +1,19 @@
+This product includes third-party software.
+
+- PySide6 / Shiboken6 / Qt for Python
+  License: LGPLv3
+- NumPy
+  License: BSD-3-Clause and bundled third-party notices
+- Hydra Core
+  License: MIT
+- iopath
+  License: MIT
+- PyTorch
+  License: BSD-3-Clause
+- TorchVision
+  License: BSD
+- sam2
+  License: Apache 2.0
+  Note: SAM2.1 model weights are not bundled with this app. The app downloads them separately.
+- PyInstaller bootloader
+  License: GPLv2-or-later with special exception

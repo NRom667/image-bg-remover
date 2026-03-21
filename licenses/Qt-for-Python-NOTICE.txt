@@ -1,0 +1,18 @@
+Qt for Python licensing note
+===========================
+
+This project uses PySide6 / Shiboken6.
+
+The package metadata in this environment declares licensing under LGPL/GPL and
+commercial terms. The installed wheel license directory exposed commercial
+license notices, which have been copied into this folder.
+
+Before final distribution, verify the exact compliance package you want to ship
+for Qt for Python and include the corresponding license texts and notices for
+that distribution model.
+
+Official documentation:
+- https://doc.qt.io/qtforpython/
+
+This note is included to avoid implying that the copied commercial notice files
+alone are sufficient for every redistribution case.
