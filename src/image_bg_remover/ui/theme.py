@@ -299,6 +299,19 @@ def dialog_stylesheet() -> str:
     QDialog {{
         background: {COLOR_BG_APP};
     }}
+    QScrollArea#helpScrollArea {{
+        border: 1px solid {COLOR_BORDER_DEFAULT};
+        border-radius: {RADIUS_MD}px;
+        background: {COLOR_BG_PANEL};
+    }}
+    QWidget#helpScrollContent {{
+        background: {COLOR_BG_PANEL};
+    }}
+    QFrame#helpSectionCard {{
+        background: {COLOR_BG_CARD};
+        border: 1px solid {COLOR_BORDER_DEFAULT};
+        border-radius: {RADIUS_MD}px;
+    }}
     QFrame#modelCard {{
         background: {COLOR_BG_CARD};
         border: 1px solid {COLOR_BORDER_DEFAULT};
@@ -322,6 +335,20 @@ def dialog_stylesheet() -> str:
         font-size: 13px;
     }}
     QLabel#dialogDescriptionLabel {{
+        color: {COLOR_TEXT_SECONDARY};
+        font-size: 14px;
+    }}
+    QLabel#helpDialogTitle {{
+        color: {COLOR_TEXT_PRIMARY};
+        font-size: 24px;
+        font-weight: 700;
+    }}
+    QLabel#helpSectionTitle {{
+        color: {COLOR_TEXT_PRIMARY};
+        font-size: 16px;
+        font-weight: 700;
+    }}
+    QLabel#helpSectionBody {{
         color: {COLOR_TEXT_SECONDARY};
         font-size: 14px;
     }}
@@ -388,6 +415,29 @@ def dialog_stylesheet() -> str:
         color: {COLOR_TEXT_DISABLED};
         background: {COLOR_BG_DISABLED};
         border: 1px solid {COLOR_BORDER_DISABLED};
+    }}
+    QCheckBox {{
+        color: {COLOR_TEXT_PRIMARY};
+        font-family: "{FONT_FAMILY}";
+        font-size: 14px;
+        spacing: 8px;
+        background: transparent;
+    }}
+    QCheckBox::indicator {{
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        border: 1px solid {COLOR_BORDER_DEFAULT};
+        background: {COLOR_BG_CARD};
+    }}
+    QCheckBox::indicator:hover {{
+        border: 1px solid {COLOR_BORDER_STRONG};
+        background: {COLOR_BG_HOVER};
+    }}
+    QCheckBox::indicator:checked {{
+        border: 1px solid {COLOR_ACCENT_PRIMARY};
+        background: {COLOR_ACCENT_PRIMARY};
+        image: url(images/checkbox-check.svg);
     }}
     QProgressBar {{
         min-height: 12px;

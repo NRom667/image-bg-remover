@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRectF, QThread, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QRectF, QSettings, QThread, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from image_bg_remover.config import SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_MODELS
+from image_bg_remover.ui.help_dialog import HelpDialog
 from image_bg_remover.ui.model_management import ModelManagementDialog
 from image_bg_remover.inference import InferenceResult, SamInferenceEngine
 from image_bg_remover.masking import apply_mask_to_image
@@ -217,14 +218,17 @@ class InferenceWorker(QObject):
 
 class MainWindow(QMainWindow):
     inference_requested = Signal(str, object, object, object, bool, float)
+    HELP_AUTO_SHOW_SETTINGS_KEY = "ui/show_help_on_startup"
 
     def __init__(self) -> None:
         super().__init__()
         self.state = AppState()
         self.inference_running = False
+        self.settings = QSettings()
         self.available_model_keys: set[str] = set()
         self._refresh_available_models(update_selection=True)
         self._startup_model_dialog_pending = not self.available_model_keys
+        self._startup_help_dialog_pending = self._should_auto_show_help()
 
         self.inference_thread = QThread(self)
         self.inference_worker = InferenceWorker()
@@ -246,9 +250,8 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
-        if self._startup_model_dialog_pending:
-            self._startup_model_dialog_pending = False
-            QTimer.singleShot(0, self._open_model_management_for_missing_models)
+        if self._startup_help_dialog_pending or self._startup_model_dialog_pending:
+            QTimer.singleShot(0, self._run_startup_dialogs)
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self.inference_thread.quit()
@@ -305,6 +308,27 @@ class MainWindow(QMainWindow):
                 "利用可能なモデルが見つかりません。モデル管理から少なくとも1つダウンロードしてください。",
             )
             self.statusBar().showMessage("モデルが未配置です")
+
+    def _should_auto_show_help(self) -> bool:
+        stored_value = self.settings.value(self.HELP_AUTO_SHOW_SETTINGS_KEY, True, type=bool)
+        return bool(stored_value)
+
+    def _set_auto_show_help(self, enabled: bool) -> None:
+        self.settings.setValue(self.HELP_AUTO_SHOW_SETTINGS_KEY, enabled)
+        self.settings.sync()
+
+    def _run_startup_dialogs(self) -> None:
+        if self._startup_help_dialog_pending:
+            self._startup_help_dialog_pending = False
+            self._open_help_dialog()
+        if self._startup_model_dialog_pending:
+            self._startup_model_dialog_pending = False
+            self._open_model_management_for_missing_models()
+
+    def _open_help_dialog(self) -> None:
+        dialog = HelpDialog(self._should_auto_show_help(), self)
+        dialog.exec()
+        self._set_auto_show_help(dialog.auto_show_enabled())
 
     def _refresh_available_models(self, update_selection: bool = False) -> None:
         self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.is_available()}
@@ -413,6 +437,9 @@ class MainWindow(QMainWindow):
         title = QLabel("Control Panel", sidebar)
         title.setObjectName("sidebarTitle")
 
+        self.help_button = QPushButton("使い方", sidebar)
+        self.help_button.clicked.connect(self._open_help_dialog)
+
         workflow_group = QGroupBox("Workflow", sidebar)
         workflow_layout = QVBoxLayout(workflow_group)
         workflow_layout.setSpacing(10)
@@ -490,6 +517,7 @@ class MainWindow(QMainWindow):
         status_layout.addWidget(self.busy_value, 7, 1)
 
         layout.addWidget(title)
+        layout.addWidget(self.help_button)
         layout.addWidget(workflow_group)
         layout.addWidget(self.manage_models_button)
         layout.addWidget(self.reset_button)
@@ -715,6 +743,7 @@ class MainWindow(QMainWindow):
         has_points = bool(self.state.foreground_points or self.state.background_points)
 
         self.load_button.setEnabled(idle)
+        self.help_button.setEnabled(True)
         self.reset_button.setEnabled(idle and (has_points or has_mask or has_result))
         self.create_mask_button.setEnabled(idle and has_image and has_available_model)
         self.save_result_button.setEnabled(idle and has_result)
