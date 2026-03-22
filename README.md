@@ -9,6 +9,12 @@
 - SAM2.1による高精度なセグメンテーション
   - アプリ内でSAM2.1のダウンロードが可能
 
+# ダウンロード
+[リリースページ](https://github.com/NRom667/image-bg-remover/releases)からダウンロードできます
+
+最新版の***.7zとついているファイルをダウンロードしてください。
+![alt text](<images_README/ダウンロード方法.png>)
+
 
 # 機能詳細
 - jpg/ pngを読込
