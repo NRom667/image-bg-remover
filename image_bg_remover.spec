@@ -138,7 +138,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='BGRemover',
+    name='背景リムーバー',
     icon=str(icon_file),
     version=version_info,
     debug=False,

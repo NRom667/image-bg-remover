@@ -249,7 +249,7 @@ class MainWindow(QMainWindow):
         self.inference_worker.failed.connect(self._handle_inference_failed)
         self.inference_thread.start()
 
-        self.setWindowTitle("Image BG Remover")
+        self.setWindowTitle("背景リムーバー BG Remover")
         self.resize(1400, 900)
         self.setMinimumSize(920, 620)
         self.setAcceptDrops(True)

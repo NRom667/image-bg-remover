@@ -22,3 +22,4 @@ if (-not (Test-Path $AppDistDir)) {
 Copy-Item -Force (Join-Path $Root 'LICENSE') $AppDistDir
 Copy-Item -Force (Join-Path $Root 'THIRD_PARTY_LICENSES.txt') $AppDistDir
 Copy-Item -Recurse -Force (Join-Path $Root 'licenses') (Join-Path $AppDistDir 'licenses')
+Get-ChildItem -Path (Join-Path $AppDistDir '\_internal\models\sam2') | Remove-Item -Force
