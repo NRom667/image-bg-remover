@@ -481,6 +481,7 @@ class MainWindow(QMainWindow):
         self.create_mask_button.clicked.connect(self._handle_create_mask)
         self.soften_edges_checkbox = QCheckBox("フチをぼかす", workflow_group)
         self.soften_edges_checkbox.setChecked(True)
+        self.soften_edges_checkbox.toggled.connect(self._handle_soften_edges_toggled)
         self.feather_radius_spinbox = QDoubleSpinBox(workflow_group)
         self.feather_radius_spinbox.setRange(0.1, 20.0)
         self.feather_radius_spinbox.setSingleStep(0.1)
@@ -745,6 +746,10 @@ class MainWindow(QMainWindow):
         self.state.selected_model_key = selected_key
         self.statusBar().showMessage(f"モデル選択: {self.model_combo.currentText()}")
 
+    def _handle_soften_edges_toggled(self, checked: bool) -> None:
+        _ = checked
+        self._sync_soften_edges_controls()
+
     def _handle_mapping_changed(self, mapping: ImageViewportMapping | None) -> None:
         self.state.image_mapping = mapping
         self._sync_ui()
@@ -814,8 +819,7 @@ class MainWindow(QMainWindow):
         self.save_result_button.setEnabled(idle and has_result)
         self.model_combo.setEnabled(idle)
         self.manage_models_button.setEnabled(idle)
-        self.soften_edges_checkbox.setEnabled(idle and has_image)
-        self.feather_radius_spinbox.setEnabled(idle and has_image and self.soften_edges_checkbox.isChecked())
+        self._sync_soften_edges_controls()
 
         self.image_state_value.setText("読込済み" if has_image else "未読込")
         self.mask_state_value.setText("作成済み" if has_mask else "未作成")
@@ -828,6 +832,12 @@ class MainWindow(QMainWindow):
 
         self.result_preview.set_image(self.state.background_removed_image)
 
+    def _sync_soften_edges_controls(self) -> None:
+        has_image = self.state.image_loaded and self.state.source_image is not None
+        idle = not self.inference_running
+        checkbox_enabled = idle and has_image
+        self.soften_edges_checkbox.setEnabled(checkbox_enabled)
+        self.feather_radius_spinbox.setEnabled(checkbox_enabled and self.soften_edges_checkbox.isChecked())
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(main_window_stylesheet())
