@@ -55,6 +55,6 @@ def run() -> int:
     if not app_icon.isNull():
         window.setWindowIcon(app_icon)
     window.showMaximized()
-    QTimer.singleShot(0, _preload_inference_runtime)
+    # QTimer.singleShot(0, _preload_inference_runtime)
 
     return app.exec()
