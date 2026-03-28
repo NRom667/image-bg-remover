@@ -89,7 +89,7 @@ class ResultPreviewPanel(QFrame):
                 placeholder_font = QFont(self.font())
                 placeholder_font.setPointSize(16)
                 painter.setFont(placeholder_font)
-                painter.drawText(body_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, "結果プレビューは未生成です")
+                painter.drawText(body_rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, "ここに背景を削除した結果が表示されます")
                 return
 
             scale = min(body_rect.width() / self._pixmap.width(), body_rect.height() / self._pixmap.height())
