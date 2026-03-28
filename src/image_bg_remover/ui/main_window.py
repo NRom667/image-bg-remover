@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import sys
 
-from PySide6.QtCore import QObject, QRectF, QSettings, QSize, QThread, Qt, QTimer, QUrl, Signal, Slot
+from PySide6.QtCore import QObject, QRectF, QProcess, QSettings, QSize, QThread, Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QFont, QGuiApplication, QIcon, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -198,6 +199,11 @@ class InferenceWorker(QObject):
         super().__init__()
         self._engine: SamInferenceEngine | None = None
 
+    def _get_engine(self) -> SamInferenceEngine:
+        if self._engine is None:
+            self._engine = SamInferenceEngine()
+        return self._engine
+
     @Slot(str, object, object, object, bool, float, int)
     def run_inference(
         self,
@@ -210,9 +216,8 @@ class InferenceWorker(QObject):
         source_image_revision: int,
     ) -> None:
         try:
-            if self._engine is None:
-                self._engine = SamInferenceEngine()
-            result = self._engine.predict_mask(
+            engine = self._get_engine()
+            result = engine.predict_mask(
                 model_key,
                 source_image,
                 list(foreground_points),
@@ -235,6 +240,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.state = AppState()
         self.inference_running = False
+        self.inference_warming_up = True
+        self._warmup_error_message: str | None = None
+        self._warmup_process: QProcess | None = None
         self.settings = QSettings()
         self._source_image_revision = 0
         self.available_model_keys: set[str] = set()
@@ -249,6 +257,7 @@ class MainWindow(QMainWindow):
         self.inference_worker.finished.connect(self._handle_inference_finished)
         self.inference_worker.failed.connect(self._handle_inference_failed)
         self.inference_thread.start()
+        self._start_background_warmup()
 
         self.setWindowTitle("背景リムーバー BG Remover")
         self.resize(1400, 900)
@@ -259,7 +268,7 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
-        self.statusBar().showMessage("ready")
+        self.statusBar().showMessage("初期化中...")
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if self._extract_dropped_image_path(event) is None or self.inference_running:
@@ -281,6 +290,9 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self._run_startup_dialogs)
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        if self._warmup_process is not None and self._warmup_process.state() != QProcess.ProcessState.NotRunning:
+            self._warmup_process.kill()
+            self._warmup_process.waitForFinished(1000)
         self.inference_thread.quit()
         self.inference_thread.wait(3000)
         super().closeEvent(event)
@@ -356,6 +368,44 @@ class MainWindow(QMainWindow):
         dialog = HelpDialog(self._should_auto_show_help(), self)
         dialog.exec()
         self._set_auto_show_help(dialog.auto_show_enabled())
+
+    def _start_background_warmup(self) -> None:
+        process = QProcess(self)
+        process.setProgram(sys.executable)
+        if getattr(sys, 'frozen', False):
+            process.setArguments(['--warmup-runtime'])
+        else:
+            main_script = Path(__file__).resolve().parents[3] / 'main.py'
+            process.setArguments([str(main_script), '--warmup-runtime'])
+        process.finished.connect(self._handle_warmup_process_finished)
+        process.errorOccurred.connect(self._handle_warmup_process_error)
+        self._warmup_process = process
+        process.start()
+
+    def _handle_warmup_process_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
+        process = self._warmup_process
+        self._warmup_process = None
+        if exit_status != QProcess.ExitStatus.NormalExit or exit_code != 0:
+            detail = ''
+            if process is not None:
+                detail = bytes(process.readAllStandardError()).decode(errors='replace').strip()
+            message = detail or f'初期化プロセスが異常終了しました (exit_code={exit_code})'
+            self._handle_warmup_failed(message)
+            if process is not None:
+                process.deleteLater()
+            return
+        self._handle_warmup_finished()
+        if process is not None:
+            process.deleteLater()
+
+    def _handle_warmup_process_error(self, _error: QProcess.ProcessError) -> None:
+        process = self._warmup_process
+        self._warmup_process = None
+        detail = ''
+        if process is not None:
+            detail = process.errorString()
+            process.deleteLater()
+        self._handle_warmup_failed(detail or '初期化プロセスを開始できませんでした')
 
     def _refresh_available_models(self, update_selection: bool = False) -> None:
         self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.is_available()}
@@ -661,6 +711,13 @@ class MainWindow(QMainWindow):
     def _handle_create_mask(self) -> None:
         if self.inference_running:
             return
+        if self.inference_warming_up:
+            self.statusBar().showMessage("初期化中です。完了までお待ちください")
+            return
+        if self._warmup_error_message is not None:
+            self._show_message_box(QMessageBox.Icon.Critical, "初期化失敗", self._warmup_error_message)
+            self.statusBar().showMessage("初期化に失敗しました")
+            return
         if not self.state.image_loaded or self.state.source_image is None:
             self._show_message_box(QMessageBox.Icon.Information, "画像未読込", "先に画像を読み込んでください。")
             return
@@ -779,6 +836,19 @@ class MainWindow(QMainWindow):
         self.result_preview.set_image(self.state.background_removed_image)
         self._sync_ui()
 
+    def _handle_warmup_finished(self) -> None:
+        self.inference_warming_up = False
+        self._warmup_error_message = None
+        self._sync_ui()
+        self.statusBar().showMessage("準備完了")
+
+    def _handle_warmup_failed(self, message: str) -> None:
+        self.inference_warming_up = False
+        self._warmup_error_message = message
+        self._sync_ui()
+        self._show_message_box(QMessageBox.Icon.Critical, "初期化失敗", message)
+        self.statusBar().showMessage("初期化に失敗しました")
+
     def _handle_inference_finished(self, result: InferenceResult) -> None:
         self.state.set_mask(result.mask, result.overlay)
         self._apply_background_removal()
@@ -808,6 +878,7 @@ class MainWindow(QMainWindow):
         has_result = self.state.background_removed and self.state.background_removed_image is not None
         has_mapping = self.state.image_mapping is not None
         idle = not self.inference_running
+        ready_for_inference = idle and not self.inference_warming_up and self._warmup_error_message is None
         has_available_model = self.state.selected_model_key in self.available_model_keys if self.state.selected_model_key is not None else False
         has_points = bool(self.state.foreground_points or self.state.background_points)
 
@@ -815,7 +886,8 @@ class MainWindow(QMainWindow):
         self.help_button.setEnabled(True)
         self.reset_button.setEnabled(idle and (has_points or has_mask or has_result))
         self.support_author_button.setEnabled(idle)
-        self.create_mask_button.setEnabled(idle and has_image and has_available_model)
+        self.create_mask_button.setEnabled(ready_for_inference and has_image and has_available_model)
+        self.create_mask_button.setText("初期化中..." if self.inference_warming_up else "背景を削除")
         self.save_result_button.setEnabled(idle and has_result)
         self.model_combo.setEnabled(idle)
         self.manage_models_button.setEnabled(idle)
@@ -828,7 +900,7 @@ class MainWindow(QMainWindow):
         self.foreground_count_value.setText(str(len(self.state.foreground_points)))
         self.background_count_value.setText(str(len(self.state.background_points)))
         self.mask_data_value.setText("あり" if self.state.current_mask is not None else "なし")
-        self.busy_value.setText("はい" if self.inference_running else "いいえ")
+        self.busy_value.setText("はい" if self.inference_running or self.inference_warming_up else "いいえ")
 
         self.result_preview.set_image(self.state.background_removed_image)
 
