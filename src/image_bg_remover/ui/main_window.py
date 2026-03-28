@@ -413,11 +413,8 @@ class MainWindow(QMainWindow):
         result_layout.setSpacing(10)
 
         self.result_preview = ResultPreviewPanel(result_group)
-        self.result_info_label = QLabel("背景削除結果は未生成です", result_group)
-        self.result_info_label.setObjectName("metaLabel")
 
         result_layout.addWidget(self.result_preview)
-        result_layout.addWidget(self.result_info_label)
 
         content_layout.addWidget(input_group, stretch=4)
         content_layout.addWidget(result_group, stretch=2)
@@ -831,15 +828,6 @@ class MainWindow(QMainWindow):
 
         self.result_preview.set_image(self.state.background_removed_image)
 
-        if self.inference_running:
-            self.result_info_label.setText("SAM2.1 でマスクを作成し、背景削除まで実行中です")
-        elif has_result and self.state.background_removed_image is not None:
-            result = self.state.background_removed_image
-            self.result_info_label.setText(f"背景削除結果: {result.width()} x {result.height()} の透過画像")
-        elif has_mask:
-            self.result_info_label.setText("SAM2.1 マスクを保持中です")
-        else:
-            self.result_info_label.setText("背景削除結果は未生成です")
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(main_window_stylesheet())
