@@ -654,7 +654,7 @@ class MainWindow(QMainWindow):
         self.input_preview.set_points([], [])
         self.result_preview.set_image(None)
         self._sync_ui()
-        self.statusBar().showMessage("????????????????")
+        self.statusBar().showMessage("リセットしました")
 
     def _handle_support_author(self) -> None:
         QDesktopServices.openUrl(QUrl("https://ofuse.me/rom1234"))
