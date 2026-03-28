@@ -1,10 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRectF, QSettings, QThread, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFont, QGuiApplication, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
+from PySide6.QtCore import QObject, QRectF, QSettings, QSize, QThread, Qt, QTimer, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QFont, QGuiApplication, QIcon, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -33,6 +33,7 @@ from image_bg_remover.ui.help_dialog import HelpDialog
 from image_bg_remover.ui.model_management import ModelManagementDialog
 from image_bg_remover.inference import InferenceResult, SamInferenceEngine
 from image_bg_remover.masking import apply_mask_to_image
+from image_bg_remover.paths import get_image_asset_path
 from image_bg_remover.state import AppState, ImageViewportMapping
 from image_bg_remover.ui.image_preview import ImagePreviewWidget
 from image_bg_remover.ui.theme import (
@@ -512,6 +513,12 @@ class MainWindow(QMainWindow):
         self.reset_button.setObjectName("tertiaryButton")
         self.reset_button.clicked.connect(self._handle_reset)
 
+        self.support_author_button = QPushButton(" 作者を応援する", sidebar)
+        self.support_author_button.setObjectName("tertiaryButton")
+        self.support_author_button.setIcon(QIcon(str(get_image_asset_path("ハートのマーク2.svg"))))
+        self.support_author_button.setIconSize(QSize(18, 18))
+        self.support_author_button.clicked.connect(self._handle_support_author)
+
         status_group = QGroupBox("State", sidebar)
         status_layout = QGridLayout(status_group)
         status_layout.setHorizontalSpacing(12)
@@ -548,6 +555,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(workflow_group)
         layout.addWidget(self.manage_models_button)
         layout.addWidget(self.reset_button)
+        layout.addWidget(self.support_author_button)
         layout.addWidget(status_group)
         layout.addItem(QSpacerItem(20, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
 
@@ -647,6 +655,10 @@ class MainWindow(QMainWindow):
         self.result_preview.set_image(None)
         self._sync_ui()
         self.statusBar().showMessage("????????????????")
+
+    def _handle_support_author(self) -> None:
+        QDesktopServices.openUrl(QUrl("https://ofuse.me/rom1234"))
+        self.statusBar().showMessage("支援ページを開きました")
 
     def _handle_create_mask(self) -> None:
         if self.inference_running:
@@ -800,6 +812,7 @@ class MainWindow(QMainWindow):
         self.load_button.setEnabled(idle)
         self.help_button.setEnabled(True)
         self.reset_button.setEnabled(idle and (has_points or has_mask or has_result))
+        self.support_author_button.setEnabled(idle)
         self.create_mask_button.setEnabled(idle and has_image and has_available_model)
         self.save_result_button.setEnabled(idle and has_result)
         self.model_combo.setEnabled(idle)
@@ -830,6 +843,8 @@ class MainWindow(QMainWindow):
 
     def _apply_styles(self) -> None:
         self.setStyleSheet(main_window_stylesheet())
+
+
 
 
 
