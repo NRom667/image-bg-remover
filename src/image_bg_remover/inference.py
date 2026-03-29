@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import sys
 from typing import Any
 
 import numpy as np
@@ -26,6 +27,7 @@ class SamInferenceEngine:
         self._torch: Any | None = None
         self._sam2_image_predictor_cls: Any | None = None
         self._build_sam2: Any | None = None
+        self._cache_predictors = not getattr(sys, 'frozen', False)
 
     def predict_mask(
         self,
@@ -38,26 +40,31 @@ class SamInferenceEngine:
         source_image_key: int | None = None,
     ) -> InferenceResult:
         predictor = self._get_predictor(model_key)
-        self._prepare_image(model_key, predictor, source_image, source_image_key=source_image_key)
+        try:
+            self._prepare_image(model_key, predictor, source_image, source_image_key=source_image_key)
 
-        point_coords, point_labels = self._build_prompt_arrays(foreground_points, background_points)
-        multimask_output = len(point_coords) == 1
-        torch = self._get_torch_module()
+            point_coords, point_labels = self._build_prompt_arrays(foreground_points, background_points)
+            multimask_output = len(point_coords) == 1
+            torch = self._get_torch_module()
 
-        with torch.inference_mode():
-            masks, scores, _ = predictor.predict(
-                point_coords=point_coords,
-                point_labels=point_labels,
-                multimask_output=multimask_output,
-            )
+            with torch.inference_mode():
+                masks, scores, _ = predictor.predict(
+                    point_coords=point_coords,
+                    point_labels=point_labels,
+                    multimask_output=multimask_output,
+                )
 
-        best_index = int(np.argmax(scores))
-        best_mask = masks[best_index]
-        mask_image = self._mask_array_to_qimage(best_mask)
-        if soften_edges:
-            mask_image = feather_mask(mask_image, radius=feather_radius)
-        overlay = build_mask_overlay(mask_image)
-        return InferenceResult(mask=mask_image, overlay=overlay, score=float(scores[best_index]), model_key=model_key)
+            best_index = int(np.argmax(scores))
+            best_mask = masks[best_index]
+            mask_image = self._mask_array_to_qimage(best_mask)
+            if soften_edges:
+                mask_image = feather_mask(mask_image, radius=feather_radius)
+            overlay = build_mask_overlay(mask_image)
+            return InferenceResult(mask=mask_image, overlay=overlay, score=float(scores[best_index]), model_key=model_key)
+        finally:
+            if not self._cache_predictors:
+                self._predictors.pop(model_key, None)
+                self._prepared_image_keys.pop(model_key, None)
 
     def _get_predictor(self, model_key: str) -> Any:
         cached = self._predictors.get(model_key)
@@ -76,7 +83,8 @@ class SamInferenceEngine:
         predictor_cls = self._get_sam2_image_predictor_cls()
         model = build_sam2(str(model_definition.config_path), str(model_definition.checkpoint_path), device="cpu")
         predictor = predictor_cls(model)
-        self._predictors[model_key] = predictor
+        if self._cache_predictors:
+            self._predictors[model_key] = predictor
         return predictor
 
     def _prepare_image(
