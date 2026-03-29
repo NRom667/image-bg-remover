@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 
 from image_bg_remover.app import run, warm_up_inference_runtime
 

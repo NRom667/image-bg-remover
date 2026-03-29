@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QObject, QRectF, QProcess, QSettings, QSize, QThread, Qt, QTimer, QUrl, Signal, Slot
+from PySide6.QtCore import QObject, QRectF, QProcess, QSettings, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QFont, QGuiApplication, QIcon, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -191,12 +192,13 @@ class ModelComboItemDelegate(QStyledItemDelegate):
         return size
 
 
-class InferenceWorker(QObject):
-    finished = Signal(object)
-    failed = Signal(str)
+class InferenceBridge(QObject):
+    inference_finished = Signal(object)
+    inference_failed = Signal(str)
 
+
+class InferenceRunner:
     def __init__(self) -> None:
-        super().__init__()
         self._engine: SamInferenceEngine | None = None
 
     def _get_engine(self) -> SamInferenceEngine:
@@ -204,7 +206,6 @@ class InferenceWorker(QObject):
             self._engine = SamInferenceEngine()
         return self._engine
 
-    @Slot(str, object, object, object, bool, float, int)
     def run_inference(
         self,
         model_key: str,
@@ -214,26 +215,20 @@ class InferenceWorker(QObject):
         soften_edges: bool,
         feather_radius: float,
         source_image_revision: int,
-    ) -> None:
-        try:
-            engine = self._get_engine()
-            result = engine.predict_mask(
-                model_key,
-                source_image,
-                list(foreground_points),
-                list(background_points),
-                soften_edges=soften_edges,
-                feather_radius=feather_radius,
-                source_image_key=source_image_revision,
-            )
-        except Exception as exc:
-            self.failed.emit(str(exc))
-            return
-        self.finished.emit(result)
+    ) -> InferenceResult:
+        engine = self._get_engine()
+        return engine.predict_mask(
+            model_key,
+            source_image,
+            list(foreground_points),
+            list(background_points),
+            soften_edges=soften_edges,
+            feather_radius=feather_radius,
+            source_image_key=source_image_revision,
+        )
 
 
 class MainWindow(QMainWindow):
-    inference_requested = Signal(str, object, object, object, bool, float, int)
     HELP_AUTO_SHOW_SETTINGS_KEY = "ui/show_help_on_startup"
 
     def __init__(self) -> None:
@@ -243,6 +238,9 @@ class MainWindow(QMainWindow):
         self.inference_warming_up = True
         self._warmup_error_message: str | None = None
         self._warmup_process: QProcess | None = None
+        self._inference_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="inference")
+        self._inference_runner = InferenceRunner()
+        self._inference_bridge = InferenceBridge()
         self.settings = QSettings()
         self._source_image_revision = 0
         self.available_model_keys: set[str] = set()
@@ -250,13 +248,8 @@ class MainWindow(QMainWindow):
         self._startup_model_dialog_pending = not self.available_model_keys
         self._startup_help_dialog_pending = self._should_auto_show_help()
 
-        self.inference_thread = QThread(self)
-        self.inference_worker = InferenceWorker()
-        self.inference_worker.moveToThread(self.inference_thread)
-        self.inference_requested.connect(self.inference_worker.run_inference)
-        self.inference_worker.finished.connect(self._handle_inference_finished)
-        self.inference_worker.failed.connect(self._handle_inference_failed)
-        self.inference_thread.start()
+        self._inference_bridge.inference_finished.connect(self._handle_inference_finished)
+        self._inference_bridge.inference_failed.connect(self._handle_inference_failed)
         self._start_background_warmup()
 
         self.setWindowTitle("背景リムーバー BG Remover")
@@ -293,8 +286,7 @@ class MainWindow(QMainWindow):
         if self._warmup_process is not None and self._warmup_process.state() != QProcess.ProcessState.NotRunning:
             self._warmup_process.kill()
             self._warmup_process.waitForFinished(1000)
-        self.inference_thread.quit()
-        self.inference_thread.wait(3000)
+        self._inference_executor.shutdown(wait=True, cancel_futures=True)
         super().closeEvent(event)
 
     def _show_message_box(self, icon: QMessageBox.Icon, title: str, text: str) -> None:
@@ -406,6 +398,31 @@ class MainWindow(QMainWindow):
             detail = process.errorString()
             process.deleteLater()
         self._handle_warmup_failed(detail or '初期化プロセスを開始できませんでした')
+
+    def _run_inference_task(
+        self,
+        model_key: str,
+        source_image: QImage,
+        foreground_points,
+        background_points,
+        soften_edges: bool,
+        feather_radius: float,
+        source_image_revision: int,
+    ) -> None:
+        try:
+            result = self._inference_runner.run_inference(
+                model_key,
+                source_image,
+                foreground_points,
+                background_points,
+                soften_edges,
+                feather_radius,
+                source_image_revision,
+            )
+        except Exception as exc:
+            self._inference_bridge.inference_failed.emit(str(exc))
+            return
+        self._inference_bridge.inference_finished.emit(result)
 
     def _refresh_available_models(self, update_selection: bool = False) -> None:
         self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.is_available()}
@@ -730,7 +747,8 @@ class MainWindow(QMainWindow):
 
         self._set_inference_running(True)
         self.statusBar().showMessage(f"{self.model_combo.currentText()} でマスクを作成中...")
-        self.inference_requested.emit(
+        self._inference_executor.submit(
+            self._run_inference_task,
             self.state.selected_model_key,
             self.state.source_image.copy(),
             list(self.state.foreground_points),
