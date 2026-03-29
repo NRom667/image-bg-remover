@@ -561,7 +561,7 @@ class MainWindow(QMainWindow):
         self.reset_button.setObjectName("tertiaryButton")
         self.reset_button.clicked.connect(self._handle_reset)
 
-        self.support_author_button = QPushButton(" 作者を応援する", sidebar)
+        self.support_author_button = QPushButton(" 作者を支援する", sidebar)
         self.support_author_button.setObjectName("tertiaryButton")
         self.support_author_button.setIcon(QIcon(str(get_image_asset_path("ハートのマーク2.svg"))))
         self.support_author_button.setIconSize(QSize(18, 18))
