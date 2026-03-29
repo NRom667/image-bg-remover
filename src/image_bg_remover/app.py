@@ -4,7 +4,6 @@ import ctypes
 import logging
 import sys
 
-from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -15,15 +14,6 @@ from image_bg_remover.ui.theme import create_app_font
 WINDOWS_APP_ID = "Rom.BGRemover"
 
 
-def _preload_inference_runtime() -> None:
-    from image_bg_remover.inference import SamInferenceEngine
-
-    engine = SamInferenceEngine()
-    engine._get_torch_module()
-    engine._get_build_sam2()
-    engine._get_sam2_image_predictor_cls()
-
-
 def _configure_windows_app_id() -> None:
     if sys.platform != "win32":
         return
@@ -32,6 +22,17 @@ def _configure_windows_app_id() -> None:
     except (AttributeError, OSError):
         logging.getLogger(__name__).debug("Failed to set Windows AppUserModelID", exc_info=True)
 
+
+
+
+def warm_up_inference_runtime() -> int:
+    from image_bg_remover.inference import SamInferenceEngine
+
+    engine = SamInferenceEngine()
+    engine._get_torch_module()
+    engine._get_build_sam2()
+    engine._get_sam2_image_predictor_cls()
+    return 0
 
 def run() -> int:
     from image_bg_remover.ui.main_window import MainWindow
@@ -55,6 +56,5 @@ def run() -> int:
     if not app_icon.isNull():
         window.setWindowIcon(app_icon)
     window.showMaximized()
-    QTimer.singleShot(0, _preload_inference_runtime)
 
     return app.exec()
