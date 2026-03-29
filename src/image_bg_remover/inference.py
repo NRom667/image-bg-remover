@@ -22,12 +22,14 @@ class InferenceResult:
 
 class SamInferenceEngine:
     def __init__(self) -> None:
+        self._models: dict[str, Any] = {}
         self._predictors: dict[str, Any] = {}
         self._prepared_image_keys: dict[str, int] = {}
         self._torch: Any | None = None
         self._sam2_image_predictor_cls: Any | None = None
         self._build_sam2: Any | None = None
         self._cache_predictors = not getattr(sys, 'frozen', False)
+        self._cache_models = True
 
     def predict_mask(
         self,
@@ -71,6 +73,18 @@ class SamInferenceEngine:
         if cached is not None:
             return cached
 
+        predictor_cls = self._get_sam2_image_predictor_cls()
+        model = self._get_model(model_key)
+        predictor = predictor_cls(model)
+        if self._cache_predictors:
+            self._predictors[model_key] = predictor
+        return predictor
+
+    def _get_model(self, model_key: str) -> Any:
+        cached = self._models.get(model_key)
+        if cached is not None:
+            return cached
+
         model_definition = get_model_definition(model_key)
         if model_definition is None:
             raise ValueError(f"Unknown model key: {model_key}")
@@ -80,12 +94,10 @@ class SamInferenceEngine:
             raise FileNotFoundError(f"Config not found: {model_definition.config_path}")
 
         build_sam2 = self._get_build_sam2()
-        predictor_cls = self._get_sam2_image_predictor_cls()
         model = build_sam2(str(model_definition.config_path), str(model_definition.checkpoint_path), device="cpu")
-        predictor = predictor_cls(model)
-        if self._cache_predictors:
-            self._predictors[model_key] = predictor
-        return predictor
+        if self._cache_models:
+            self._models[model_key] = model
+        return model
 
     def _prepare_image(
         self,
