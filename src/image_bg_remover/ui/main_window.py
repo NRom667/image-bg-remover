@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+import json
 from pathlib import Path
 import sys
 
@@ -34,7 +34,7 @@ from image_bg_remover.config import SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_MODELS
 from image_bg_remover.ui.help_dialog import HelpDialog
 from image_bg_remover.ui.model_management import ModelManagementDialog
 from image_bg_remover.inference import InferenceResult, SamInferenceEngine
-from image_bg_remover.masking import apply_mask_to_image
+from image_bg_remover.masking import apply_mask_to_image, build_mask_overlay
 from image_bg_remover.paths import get_image_asset_path
 from image_bg_remover.state import AppState, ImageViewportMapping
 from image_bg_remover.ui.image_preview import ImagePreviewWidget
@@ -237,10 +237,12 @@ class MainWindow(QMainWindow):
         self.inference_running = False
         self.inference_warming_up = True
         self._warmup_error_message: str | None = None
-        self._warmup_process: QProcess | None = None
-        self._inference_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="inference")
-        self._inference_runner = InferenceRunner()
-        self._inference_bridge = InferenceBridge()
+        self._inference_process: QProcess | None = None
+        self._inference_stdout_buffer = bytearray()
+        self._inference_stderr_chunks: list[str] = []
+        self._next_request_id = 1
+        self._active_request_id: int | None = None
+        self._closing = False
         self.settings = QSettings()
         self._source_image_revision = 0
         self.available_model_keys: set[str] = set()
@@ -248,9 +250,7 @@ class MainWindow(QMainWindow):
         self._startup_model_dialog_pending = not self.available_model_keys
         self._startup_help_dialog_pending = self._should_auto_show_help()
 
-        self._inference_bridge.inference_finished.connect(self._handle_inference_finished)
-        self._inference_bridge.inference_failed.connect(self._handle_inference_failed)
-        self._start_background_warmup()
+        self._start_inference_server()
 
         self.setWindowTitle("背景リムーバー BG Remover")
         self.resize(1400, 900)
@@ -283,10 +283,15 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self._run_startup_dialogs)
 
     def closeEvent(self, event) -> None:  # noqa: N802
-        if self._warmup_process is not None and self._warmup_process.state() != QProcess.ProcessState.NotRunning:
-            self._warmup_process.kill()
-            self._warmup_process.waitForFinished(1000)
-        self._inference_executor.shutdown(wait=True, cancel_futures=True)
+        self._closing = True
+        process = self._inference_process
+        if process is not None and process.state() != QProcess.ProcessState.NotRunning:
+            process.write(b'{"type": "shutdown"}\n')
+            process.waitForBytesWritten(500)
+            process.terminate()
+            if not process.waitForFinished(1000):
+                process.kill()
+                process.waitForFinished(1000)
         super().closeEvent(event)
 
     def _show_message_box(self, icon: QMessageBox.Icon, title: str, text: str) -> None:
@@ -361,68 +366,139 @@ class MainWindow(QMainWindow):
         dialog.exec()
         self._set_auto_show_help(dialog.auto_show_enabled())
 
-    def _start_background_warmup(self) -> None:
+    def _start_inference_server(self) -> None:
         process = QProcess(self)
         process.setProgram(sys.executable)
         if getattr(sys, 'frozen', False):
-            process.setArguments(['--warmup-runtime'])
+            process.setArguments(['--inference-server'])
         else:
             main_script = Path(__file__).resolve().parents[3] / 'main.py'
-            process.setArguments([str(main_script), '--warmup-runtime'])
-        process.finished.connect(self._handle_warmup_process_finished)
-        process.errorOccurred.connect(self._handle_warmup_process_error)
-        self._warmup_process = process
+            process.setArguments([str(main_script), '--inference-server'])
+        process.readyReadStandardOutput.connect(self._handle_inference_process_stdout)
+        process.readyReadStandardError.connect(self._handle_inference_process_stderr)
+        process.finished.connect(self._handle_inference_process_finished)
+        process.errorOccurred.connect(self._handle_inference_process_error)
+        self._inference_process = process
         process.start()
 
-    def _handle_warmup_process_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
-        process = self._warmup_process
-        self._warmup_process = None
-        if exit_status != QProcess.ExitStatus.NormalExit or exit_code != 0:
-            detail = ''
-            if process is not None:
-                detail = bytes(process.readAllStandardError()).decode(errors='replace').strip()
-            message = detail or f'初期化プロセスが異常終了しました (exit_code={exit_code})'
-            self._handle_warmup_failed(message)
-            if process is not None:
-                process.deleteLater()
+    def _handle_inference_process_stdout(self) -> None:
+        process = self._inference_process
+        if process is None:
             return
-        self._handle_warmup_finished()
+        self._inference_stdout_buffer.extend(bytes(process.readAllStandardOutput()))
+        while True:
+            newline_index = self._inference_stdout_buffer.find(b'\n')
+            if newline_index < 0:
+                break
+            raw_line = bytes(self._inference_stdout_buffer[:newline_index]).decode(errors='replace').strip()
+            del self._inference_stdout_buffer[: newline_index + 1]
+            if not raw_line:
+                continue
+            try:
+                message = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            self._handle_inference_process_message(message)
+
+    def _handle_inference_process_stderr(self) -> None:
+        process = self._inference_process
+        if process is None:
+            return
+        chunk = bytes(process.readAllStandardError()).decode(errors='replace').strip()
+        if chunk:
+            self._inference_stderr_chunks.append(chunk)
+            self._inference_stderr_chunks = self._inference_stderr_chunks[-10:]
+
+    def _handle_inference_process_message(self, message: dict) -> None:
+        message_type = message.get('type')
+        if message_type == 'ready':
+            self._handle_warmup_finished()
+            return
+        if message_type == 'result':
+            request_id = message.get('request_id')
+            if request_id != self._active_request_id:
+                return
+            self._active_request_id = None
+            try:
+                mask_data = bytes.fromhex(message['mask_png_hex'])
+                mask = QImage()
+                if not mask.loadFromData(mask_data, 'PNG'):
+                    raise RuntimeError('マスク画像の読込に失敗しました')
+                result = InferenceResult(
+                    mask=mask,
+                    overlay=build_mask_overlay(mask),
+                    score=float(message['score']),
+                    model_key=str(message['model_key']),
+                )
+            except Exception as exc:
+                self._handle_inference_failed(str(exc))
+                return
+            self._handle_inference_finished(result)
+            return
+        if message_type in {'error', 'fatal'}:
+            request_id = message.get('request_id')
+            detail = str(message.get('message', '推論プロセスでエラーが発生しました'))
+            trace_text = str(message.get('traceback', '')).strip()
+            if trace_text:
+                detail = f'{detail}\n\n{trace_text}'
+            if request_id is not None and request_id == self._active_request_id:
+                self._active_request_id = None
+                self._handle_inference_failed(detail)
+                return
+            self._handle_warmup_failed(detail)
+
+    def _handle_inference_process_finished(self, exit_code: int, exit_status: QProcess.ExitStatus) -> None:
+        process = self._inference_process
+        self._inference_process = None
         if process is not None:
             process.deleteLater()
+        if self._closing:
+            return
+        stderr_text = '\n'.join(self._inference_stderr_chunks).strip()
+        message = stderr_text or f'推論プロセスが終了しました (exit_code={exit_code})'
+        if self.inference_running and self._active_request_id is not None:
+            self._active_request_id = None
+            self._handle_inference_failed(message)
+            return
+        self._handle_warmup_failed(message)
 
-    def _handle_warmup_process_error(self, _error: QProcess.ProcessError) -> None:
-        process = self._warmup_process
-        self._warmup_process = None
-        detail = ''
-        if process is not None:
-            detail = process.errorString()
-            process.deleteLater()
-        self._handle_warmup_failed(detail or '初期化プロセスを開始できませんでした')
+    def _handle_inference_process_error(self, _error: QProcess.ProcessError) -> None:
+        process = self._inference_process
+        if process is None or self._closing:
+            return
+        detail = process.errorString()
+        if detail:
+            self._inference_stderr_chunks.append(detail)
+            self._inference_stderr_chunks = self._inference_stderr_chunks[-10:]
 
-    def _run_inference_task(
+    def _send_inference_request(
         self,
         model_key: str,
-        source_image: QImage,
+        image_path: Path,
         foreground_points,
         background_points,
         soften_edges: bool,
         feather_radius: float,
         source_image_revision: int,
     ) -> None:
-        try:
-            result = self._inference_runner.run_inference(
-                model_key,
-                source_image,
-                foreground_points,
-                background_points,
-                soften_edges,
-                feather_radius,
-                source_image_revision,
-            )
-        except Exception as exc:
-            self._inference_bridge.inference_failed.emit(str(exc))
-            return
-        self._inference_bridge.inference_finished.emit(result)
+        process = self._inference_process
+        if process is None or process.state() != QProcess.ProcessState.Running:
+            raise RuntimeError('推論プロセスを利用できません')
+        request_id = self._next_request_id
+        self._next_request_id += 1
+        self._active_request_id = request_id
+        payload = {
+            'type': 'predict',
+            'request_id': request_id,
+            'model_key': model_key,
+            'image_path': str(image_path),
+            'image_key': source_image_revision,
+            'foreground_points': [{'x': point.x, 'y': point.y} for point in foreground_points],
+            'background_points': [{'x': point.x, 'y': point.y} for point in background_points],
+            'soften_edges': soften_edges,
+            'feather_radius': feather_radius,
+        }
+        process.write((json.dumps(payload, ensure_ascii=False) + '\n').encode('utf-8'))
 
     def _refresh_available_models(self, update_selection: bool = False) -> None:
         self.available_model_keys = {model.key for model in SUPPORTED_MODELS if model.is_available()}
@@ -745,18 +821,25 @@ class MainWindow(QMainWindow):
             self._show_message_box(QMessageBox.Icon.Information, "マスク作成", "先に前景点または背景点を追加してください。")
             return
 
+        if self.state.image_path is None:
+            self._show_message_box(QMessageBox.Icon.Warning, "画像パス未設定", "推論に必要な画像パスが見つかりません。画像を読み込み直してください。")
+            return
+
         self._set_inference_running(True)
         self.statusBar().showMessage(f"{self.model_combo.currentText()} でマスクを作成中...")
-        self._inference_executor.submit(
-            self._run_inference_task,
-            self.state.selected_model_key,
-            self.state.source_image.copy(),
-            list(self.state.foreground_points),
-            list(self.state.background_points),
-            self.soften_edges_checkbox.isChecked(),
-            self.feather_radius_spinbox.value(),
-            self._source_image_revision,
-        )
+        try:
+            self._send_inference_request(
+                self.state.selected_model_key,
+                self.state.image_path,
+                list(self.state.foreground_points),
+                list(self.state.background_points),
+                self.soften_edges_checkbox.isChecked(),
+                self.feather_radius_spinbox.value(),
+                self._source_image_revision,
+            )
+        except Exception as exc:
+            self._set_inference_running(False)
+            self._handle_inference_failed(str(exc))
 
     def _apply_background_removal(self) -> None:
         if self.state.current_mask is None or self.state.source_image is None:

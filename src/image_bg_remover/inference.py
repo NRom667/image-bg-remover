@@ -21,7 +21,7 @@ class InferenceResult:
 
 
 class SamInferenceEngine:
-    def __init__(self) -> None:
+    def __init__(self, cache_predictors: bool | None = None, cache_models: bool = True) -> None:
         self._models: dict[str, Any] = {}
         self._predictors: dict[str, Any] = {}
         self._prepared_image_keys: dict[str, int] = {}
@@ -29,8 +29,8 @@ class SamInferenceEngine:
         self._torch: Any | None = None
         self._sam2_image_predictor_cls: Any | None = None
         self._build_sam2: Any | None = None
-        self._cache_predictors = not getattr(sys, 'frozen', False)
-        self._cache_models = True
+        self._cache_predictors = (not getattr(sys, 'frozen', False)) if cache_predictors is None else cache_predictors
+        self._cache_models = cache_models
 
     def predict_mask(
         self,
