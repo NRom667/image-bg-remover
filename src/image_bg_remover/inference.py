@@ -25,6 +25,7 @@ class SamInferenceEngine:
         self._models: dict[str, Any] = {}
         self._predictors: dict[str, Any] = {}
         self._prepared_image_keys: dict[str, int] = {}
+        self._source_image_arrays: dict[int, np.ndarray] = {}
         self._torch: Any | None = None
         self._sam2_image_predictor_cls: Any | None = None
         self._build_sam2: Any | None = None
@@ -110,9 +111,18 @@ class SamInferenceEngine:
         if self._prepared_image_keys.get(model_key) == image_key:
             return
 
-        image_array = self._qimage_to_numpy_rgb(source_image)
+        image_array = self._get_source_image_array(image_key, source_image)
         predictor.set_image(image_array)
         self._prepared_image_keys[model_key] = image_key
+
+    def _get_source_image_array(self, image_key: int, source_image: QImage) -> np.ndarray:
+        cached = self._source_image_arrays.get(image_key)
+        if cached is not None:
+            return cached
+
+        image_array = self._qimage_to_numpy_rgb(source_image)
+        self._source_image_arrays = {image_key: image_array}
+        return image_array
 
     def _get_torch_module(self) -> Any:
         if self._torch is None:
