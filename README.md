@@ -1,8 +1,11 @@
 # 背景リムーバー
 このアプリは、画像の背景を削除し、透過pngとして保存するためのアプリです。
 
+[English README is here](<doc/README_en.md>)
+
+
 **↓クリックでデモ動画が開きます↓**
-[![紹介動画](<images_README/スクリーンショット.png>)](https://vimeo.com/1177951381?share=copy&fl=sv&fe=ci)
+[![紹介動画](<doc/images/スクリーンショット.png>)](https://vimeo.com/1177951381?share=copy&fl=sv&fe=ci)
 
 # 特徴
 - 前景点 / 背景点を追加し、切り抜き箇所を細かく調整可能
@@ -15,7 +18,7 @@
 [リリースページ](https://github.com/NRom667/image-bg-remover/releases)からダウンロードできます
 
 最新版の***.7zとついているファイルをダウンロードしてください。
-![alt text](<images_README/ダウンロード方法.png>)
+![alt text](<doc/images/ダウンロード方法.png>)
 
 # 作者を支援する
 このソフトが役に立ったら、OFUSEで応援してもらえると励みになります。  
