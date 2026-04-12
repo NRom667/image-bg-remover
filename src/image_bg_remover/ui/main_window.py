@@ -34,7 +34,7 @@ from image_bg_remover.config import SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_MODELS
 from image_bg_remover.ui.help_dialog import HelpDialog
 from image_bg_remover.ui.model_management import ModelManagementDialog
 from image_bg_remover.inference import InferenceResult, SamInferenceEngine
-from image_bg_remover.masking import apply_mask_to_image, build_mask_overlay
+from image_bg_remover.masking import apply_mask_to_image, build_mask_overlay, trim_transparent_margins
 from image_bg_remover.paths import get_image_asset_path
 from image_bg_remover.state import AppState, ImageViewportMapping
 from image_bg_remover.ui.image_preview import ImagePreviewWidget
@@ -646,6 +646,9 @@ class MainWindow(QMainWindow):
         workflow_layout.addWidget(self.create_mask_button)
         workflow_layout.addLayout(soften_edges_row)
         workflow_layout.addWidget(self.save_result_button)
+        self.trim_result_checkbox = QCheckBox("余白をトリム", workflow_group)
+        self.trim_result_checkbox.setChecked(True)
+        workflow_layout.addWidget(self.trim_result_checkbox)
 
         self.manage_models_button = QPushButton("モデル管理", sidebar)
         self.manage_models_button.clicked.connect(self._handle_manage_models)
@@ -870,7 +873,11 @@ class MainWindow(QMainWindow):
         if save_path.suffix.lower() != ".png":
             save_path = save_path.with_suffix(".png")
 
-        success = self.state.background_removed_image.save(str(save_path), "PNG")
+        image_to_save = self.state.background_removed_image
+        if self.trim_result_checkbox.isChecked():
+            image_to_save = trim_transparent_margins(image_to_save)
+
+        success = image_to_save.save(str(save_path), "PNG")
         if not success:
             self._show_message_box(QMessageBox.Icon.Critical, "保存失敗", "透過PNGの保存に失敗しました。")
             self.statusBar().showMessage("保存に失敗しました")
