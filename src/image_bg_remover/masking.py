@@ -60,6 +60,20 @@ def apply_mask_to_image(source_image: QImage, mask: QImage) -> QImage:
     return result
 
 
+def trim_transparent_margins(image: QImage) -> QImage:
+    argb_image = image.convertToFormat(QImage.Format.Format_ARGB32)
+    alpha = _qimage_to_numpy_argb32(argb_image)[..., 3]
+    non_transparent_rows, non_transparent_cols = np.nonzero(alpha)
+    if len(non_transparent_rows) == 0 or len(non_transparent_cols) == 0:
+        return argb_image
+
+    left = int(non_transparent_cols.min())
+    right = int(non_transparent_cols.max())
+    top = int(non_transparent_rows.min())
+    bottom = int(non_transparent_rows.max())
+    return argb_image.copy(left, top, right - left + 1, bottom - top + 1)
+
+
 def feather_mask(mask: QImage, radius: float = 2.0) -> QImage:
     if radius <= 0:
         return mask.convertToFormat(QImage.Format.Format_Grayscale8)
