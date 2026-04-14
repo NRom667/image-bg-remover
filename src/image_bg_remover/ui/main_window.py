@@ -6,10 +6,11 @@ from pathlib import Path
 import sys
 
 from PySide6.QtCore import QObject, QRectF, QProcess, QSettings, QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QFont, QGuiApplication, QIcon, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
+from PySide6.QtGui import QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QFont, QGuiApplication, QIcon, QImage, QPainter, QPalette, QPen, QPixmap, QWheelEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QColorDialog,
     QDoubleSpinBox,
     QFileDialog,
     QFrame,
@@ -43,6 +44,7 @@ from image_bg_remover.ui.theme import (
     COLOR_BG_CARD,
     COLOR_BG_DISABLED,
     COLOR_BORDER_DEFAULT,
+    COLOR_BORDER_STRONG,
     COLOR_BORDER_DISABLED,
     COLOR_CHECKER_DARK,
     COLOR_CHECKER_LIGHT,
@@ -65,12 +67,19 @@ class ResultPreviewPanel(QFrame):
         super().__init__(parent)
         self._image: QImage | None = None
         self._pixmap: QPixmap | None = None
+        self._custom_background_enabled = False
+        self._custom_background_color = QColor("#00ffff")
         self.setMinimumHeight(520)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def set_image(self, image: QImage | None) -> None:
         self._image = image
         self._pixmap = QPixmap.fromImage(image) if image is not None else None
+        self.update()
+
+    def set_background_display(self, enabled: bool, color: QColor) -> None:
+        self._custom_background_enabled = enabled
+        self._custom_background_color = QColor(color)
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
@@ -84,7 +93,10 @@ class ResultPreviewPanel(QFrame):
             painter.drawRoundedRect(rect, 18, 18)
 
             body_rect = QRectF(rect.adjusted(18, 18, -18, -18))
-            self._draw_checker_background(painter, body_rect)
+            if self._custom_background_enabled:
+                painter.fillRect(body_rect, self._custom_background_color)
+            else:
+                self._draw_checker_background(painter, body_rect)
 
             if self._pixmap is None:
                 painter.setPen(qcolor(COLOR_TEXT_MUTED))
@@ -245,12 +257,12 @@ class MainWindow(QMainWindow):
         self._closing = False
         self.settings = QSettings()
         self._source_image_revision = 0
+        self._result_preview_background_enabled = False
+        self._result_preview_background_color = QColor("#00ffff")
         self.available_model_keys: set[str] = set()
         self._refresh_available_models(update_selection=True)
         self._startup_model_dialog_pending = not self.available_model_keys
         self._startup_help_dialog_pending = self._should_auto_show_help()
-
-        self._start_inference_server()
 
         self.setWindowTitle("背景リムーバー BG Remover")
         self.resize(1400, 900)
@@ -261,6 +273,7 @@ class MainWindow(QMainWindow):
         self._populate_models()
         self._sync_ui()
         self._apply_styles()
+        self._start_inference_server()
         self.statusBar().showMessage("初期化中...")
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
@@ -591,6 +604,7 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(sidebar_scroll_area, stretch=0)
 
         self.setCentralWidget(central)
+        self._sync_result_preview_background()
 
     def _build_sidebar(self) -> QWidget:
         sidebar = QFrame(self)
@@ -653,6 +667,27 @@ class MainWindow(QMainWindow):
         self.manage_models_button = QPushButton("モデル管理", sidebar)
         self.manage_models_button.clicked.connect(self._handle_manage_models)
 
+        preview_background_row = QHBoxLayout()
+        preview_background_row.setContentsMargins(10, 0, 0, 0)
+        preview_background_row.setSpacing(4)
+
+        self.result_background_checkbox = QCheckBox("", sidebar)
+        self.result_background_checkbox.setChecked(False)
+        self.result_background_checkbox.toggled.connect(self._handle_result_background_toggled)
+
+        preview_background_label = QLabel("背景色", sidebar)
+        preview_background_label.setContentsMargins(0, 0, 15, 0)
+
+        self.result_background_color_button = QPushButton(sidebar)
+        self.result_background_color_button.setFixedSize(60, 28)
+        self.result_background_color_button.clicked.connect(self._handle_result_background_color_pick)
+        self._update_result_background_color_button()
+
+        preview_background_row.addWidget(self.result_background_checkbox)
+        preview_background_row.addWidget(preview_background_label)
+        preview_background_row.addWidget(self.result_background_color_button)
+        preview_background_row.addStretch(1)
+
         self.reset_button = QPushButton("リセット", sidebar)
         self.reset_button.setObjectName("tertiaryButton")
         self.reset_button.clicked.connect(self._handle_reset)
@@ -697,6 +732,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(title)
         layout.addWidget(self.help_button)
         layout.addWidget(workflow_group)
+        layout.addLayout(preview_background_row)
         layout.addWidget(self.manage_models_button)
         layout.addWidget(self.reset_button)
         layout.addWidget(self.support_author_button)
@@ -730,6 +766,60 @@ class MainWindow(QMainWindow):
             self.model_combo.setCurrentIndex(-1)
 
         self.model_combo.blockSignals(False)
+
+    def _sync_result_preview_background(self) -> None:
+        self.result_preview.set_background_display(
+            self._result_preview_background_enabled,
+            self._result_preview_background_color,
+        )
+
+    def _update_result_background_color_button(self) -> None:
+        color_name = self._result_preview_background_color.name().lower()
+        brightness = (
+            (self._result_preview_background_color.red() * 299)
+            + (self._result_preview_background_color.green() * 587)
+            + (self._result_preview_background_color.blue() * 114)
+        ) / 1000
+        text_color = "#1f2e3d" if brightness >= 160 else "#fffdf9"
+        self.result_background_color_button.setText("")
+        self.result_background_color_button.setStyleSheet(
+            f"""
+            QPushButton {{
+                background: {color_name};
+                color: {text_color};
+                border: 1px solid {COLOR_BORDER_DEFAULT};
+                min-height: 28px;
+                padding: 0;
+            }}
+            QPushButton:hover {{
+                background: {color_name};
+                color: {text_color};
+                border: 1px solid {COLOR_BORDER_STRONG};
+            }}
+            QPushButton:pressed {{
+                background: {color_name};
+                color: {text_color};
+                border: 1px solid {COLOR_BORDER_STRONG};
+                padding: 0;
+            }}
+            """
+        )
+
+    def _handle_result_background_toggled(self, checked: bool) -> None:
+        self._result_preview_background_enabled = checked
+        self._sync_result_preview_background()
+
+    def _handle_result_background_color_pick(self) -> None:
+        selected_color = QColorDialog.getColor(
+            self._result_preview_background_color,
+            self,
+            "Result Preview の背景色",
+        )
+        if not selected_color.isValid():
+            return
+        self._result_preview_background_color = selected_color
+        self._update_result_background_color_button()
+        self._sync_result_preview_background()
 
     def _handle_load_image(self) -> None:
         if self.inference_running:
