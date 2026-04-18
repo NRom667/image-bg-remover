@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QColorDialog,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QFrame,
@@ -258,7 +259,7 @@ class MainWindow(QMainWindow):
         self.settings = QSettings()
         self._source_image_revision = 0
         self._result_preview_background_enabled = False
-        self._result_preview_background_color = QColor("#00ffff")
+        self._result_preview_background_color = QColor("#000000")
         self.available_model_keys: set[str] = set()
         self._refresh_available_models(update_selection=True)
         self._startup_model_dialog_pending = not self.available_model_keys
@@ -809,14 +810,37 @@ class MainWindow(QMainWindow):
         self._result_preview_background_enabled = checked
         self._sync_result_preview_background()
 
+    def _color_dialog_stylesheet(self) -> str:
+        return """
+        QColorDialog QPushButton {
+            min-height: 30px;
+            max-height: 30px;
+            border-radius: 6px;
+            border: 1px solid #7e7e7e;
+            padding: 2px 12px;
+            background: #666666;
+            color: #eeeeee;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        QColorDialog QPushButton:hover {
+            background: #e8e8e8;
+            border: 1px solid #5f5f5f;
+        }
+        QColorDialog QPushButton:pressed {
+            background: #dddddd;
+            border: 1px solid #4f4f4f;
+            padding: 2px 12px;
+        }
+        """
+
     def _handle_result_background_color_pick(self) -> None:
-        selected_color = QColorDialog.getColor(
-            self._result_preview_background_color,
-            self,
-            "Result Preview の背景色",
-        )
-        if not selected_color.isValid():
+        dialog = QColorDialog(self._result_preview_background_color, self)
+        dialog.setWindowTitle("Result Preview の背景色")
+        dialog.setStyleSheet(self._color_dialog_stylesheet())
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
+        selected_color = dialog.currentColor()
         self._result_preview_background_color = selected_color
         self._update_result_background_color_button()
         self._sync_result_preview_background()

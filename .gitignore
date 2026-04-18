@@ -8,3 +8,4 @@ build/
 dist/
 .codex/
 AGENTS.md
+tmp/
