@@ -810,34 +810,10 @@ class MainWindow(QMainWindow):
         self._result_preview_background_enabled = checked
         self._sync_result_preview_background()
 
-    def _color_dialog_stylesheet(self) -> str:
-        return """
-        QColorDialog QPushButton {
-            min-height: 30px;
-            max-height: 30px;
-            border-radius: 6px;
-            border: 1px solid #7e7e7e;
-            padding: 2px 12px;
-            background: #666666;
-            color: #eeeeee;
-            font-size: 13px;
-            font-weight: 500;
-        }
-        QColorDialog QPushButton:hover {
-            background: #e8e8e8;
-            border: 1px solid #5f5f5f;
-        }
-        QColorDialog QPushButton:pressed {
-            background: #dddddd;
-            border: 1px solid #4f4f4f;
-            padding: 2px 12px;
-        }
-        """
-
     def _handle_result_background_color_pick(self) -> None:
-        dialog = QColorDialog(self._result_preview_background_color, self)
+        dialog = QColorDialog(self._result_preview_background_color)
         dialog.setWindowTitle("Result Preview の背景色")
-        dialog.setStyleSheet(self._color_dialog_stylesheet())
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         selected_color = dialog.currentColor()
