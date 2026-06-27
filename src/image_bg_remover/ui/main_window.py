@@ -288,7 +288,8 @@ class MainWindow(QMainWindow):
         if image_path is None or self.inference_running:
             event.ignore()
             return
-        self._load_image_from_path(image_path)
+        if self._load_image_from_path(image_path):
+            self._activate_after_drop()
         event.acceptProposedAction()
 
     def showEvent(self, event) -> None:  # noqa: N802
@@ -840,7 +841,14 @@ class MainWindow(QMainWindow):
     def _handle_dropped_image(self, image_path: str) -> None:
         if self.inference_running:
             return
-        self._load_image_from_path(Path(image_path))
+        if self._load_image_from_path(Path(image_path)):
+            self._activate_after_drop()
+
+    def _activate_after_drop(self) -> None:
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def _load_image_from_path(self, image_path: Path) -> bool:
         if image_path.suffix.lower() not in SUPPORTED_IMAGE_EXTENSIONS:
